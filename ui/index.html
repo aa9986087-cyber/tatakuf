@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#171127">
+  <meta name="description" content="تحدَّ ربعك في لعبة أسئلة عربية. أنشئ غرفة، شارك الرابط، وتنافسوا على النقاط.">
+  <title>تحدّي الربع | لعبة أسئلة للأصدقاء</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar wrap">
+    <a class="brand" href="/" aria-label="تحدّي الربع، الرئيسية">
+      <span class="brand-mark" aria-hidden="true">؟</span>
+      <span>تحدّي <strong>الربع</strong></span>
+    </a>
+    <button type="button" class="quiet help-button" data-action="help"><span aria-hidden="true" class="help-mark">؟</span> طريقة اللعب</button>
+  </header>
+  <main class="wrap" id="app" aria-busy="false"></main>
+  <footer class="wrap footer">
+    <span>تحدّي الربع</span><span>لعبة أسئلة للأصدقاء</span>
+  </footer>
+  <dialog id="dialog" class="dialog" aria-labelledby="dialog-title">
+    <div id="dialog-content"></div>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <noscript><p class="wrap">فعّل JavaScript عشان تقدر تلعب.</p></noscript>
+</body>
+</html>
