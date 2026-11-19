@@ -35,6 +35,7 @@ async function setup(t, seconds = 20) {
 }
 
 test("two independent players complete a match and rematch with fresh questions", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 100_000 });
   const { request, path, host, guest } = await setup(t);
   let state = (await host("/start", {})).data.room;
   assert.equal((await request(path + "/join", { name: "ضيف" })).status, 409);
@@ -66,7 +67,10 @@ test("two independent players complete a match and rematch with fresh questions"
     assert.equal(revealed.question.correctIndex, option);
     assert.deepEqual(revealed.players.map(({ score }) => score), [round, round]);
     assert.deepEqual((await host()).data.room.players, revealed.players);
-    state = (await host("/next", { round })).data.room;
+    t.mock.timers.tick(4999);
+    assert.equal((await guest()).data.room.phase, "reveal");
+    t.mock.timers.tick(1);
+    state = (await host()).data.room;
   }
   assert.equal(state.phase, "finished");
   assert.deepEqual((await guest()).data.room.players.map(({ score }) => score), [5, 5]);
@@ -75,6 +79,77 @@ test("two independent players complete a match and rematch with fresh questions"
   await host("/start", {});
   const next = (await host("/category", { round: 1, category: "science" })).data.room;
   assert.equal(seen.has(next.question.id), false);
+});
+
+test("online chat is scoped to room members, accepts simultaneous senders, and deduplicates retries", async (t) => {
+  const { request, path, host, guest } = await setup(t);
+  const message = { text: "هلا بالربع 👋", id: crypto.randomUUID() };
+  assert.equal((await request(path + "/chat", message)).status, 401);
+  const sent = await Promise.all([host("/chat", message), guest("/chat", { text: "يا هلا", id: crypto.randomUUID() })]);
+  assert.deepEqual(sent.map((entry) => entry.status), [200, 200]);
+  assert.equal((await host("/chat", message)).status, 200);
+  assert.equal((await host("/chat", { ...message, id: crypto.randomUUID() })).status, 429);
+  const state = (await guest()).data.room;
+  assert.deepEqual(state.chat.map(({ text }) => text).sort(), ["هلا بالربع 👋", "يا هلا"]);
+});
+
+test("shared screen shows the question and display host cannot answer for the two phones", async (t) => {
+  const { request } = await setup(t);
+  const created = await request("", { mode: "screen", rounds: 5, seconds: 20, categories: ["science"] });
+  assert.equal(created.status, 201);
+  const path = `/${created.data.room.code}`;
+  assert.equal((await request(path + "/invite")).data.mode, "screen");
+  assert.equal(created.data.room.display, true);
+  assert.equal(created.data.room.players.length, 0);
+  const display = (action = "", body) => request(path + action, body, created.data.token);
+  assert.equal((await display("/start", {})).status, 409);
+  const join = async (name) => {
+    const joined = await request(path + "/join", { name });
+    assert.equal(joined.data.room.display, false);
+    return (action = "", body) => request(path + action, body, joined.data.token);
+  };
+  const first = await join("علي");
+  assert.equal((await display("/start", {})).status, 409);
+  const second = await join("يوسف");
+  const started = (await display("/start", {})).data.room;
+  assert.equal((await first()).data.room.playerId, started.chooserId);
+  const question = (await first("/category", { round: 1, category: "science" })).data.room.question;
+  assert.equal(question.prompt, null);
+  assert.equal(question.correctIndex, undefined);
+  const screen = (await display()).data.room;
+  assert.ok(screen.question.prompt);
+  assert.deepEqual(screen.question.options, question.options);
+  assert.deepEqual((await second()).data.room.question, question);
+  const answer = { questionId: question.id, option: 0 };
+  assert.equal((await display("/answer", answer)).status, 403);
+  await Promise.all([first("/answer", answer), second("/answer", answer)]);
+  assert.equal((await display()).data.room.phase, "reveal");
+});
+
+test("bots choose their category and submit answers on the server clock", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 100_000 });
+  const { request } = await setup(t);
+  const created = await request("", {
+    mode: "bots", name: "سالم", rounds: 5, seconds: 15, categories: ["general"], difficulty: "hard", bots: 3
+  });
+  assert.equal(created.status, 201);
+  const path = `/${created.data.room.code}`;
+  const solo = (action = "", body) => request(path + action, body, created.data.token);
+  assert.equal(created.data.room.players.filter(({ bot }) => bot).length, 3);
+  assert.equal((await request(path + "/invite")).status, 404);
+  assert.equal((await request(path + "/join", { name: "ضيف" })).status, 404);
+  await solo("/start", {});
+  const first = (await solo("/category", { round: 1, category: "general" })).data.room;
+  await solo("/answer", { questionId: first.question.id, option: 0 });
+  t.mock.timers.tick(8000);
+  const revealed = (await solo()).data.room;
+  assert.equal(revealed.phase, "reveal");
+  assert.equal(revealed.answeredCount, 4);
+  t.mock.timers.setTime(revealed.deadline);
+  const botTurn = (await solo()).data.room;
+  assert.ok(botTurn.players.find((player) => player.id === botTurn.chooserId).bot);
+  t.mock.timers.tick(2200);
+  assert.equal((await solo()).data.room.phase, "question");
 });
 
 test("category selection and answers expire on server time without awarding missing responses", async (t) => {

@@ -2,6 +2,11 @@ const codeAlphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 const day = 86_400_000;
 const categoryTime = 15_000;
 const maxPlayers = 8;
+const revealTime = 5_000;
+const botTurnTime = 2_200;
+const modes = ["screen", "online", "bots"];
+const botNames = ["برق", "نجم", "لمعة", "صقر", "رعد", "شعلة", "وميض"];
+const botAccuracy = { easy: 0.36, normal: 0.60, hard: 0.83 };
 
 class GameError extends Error {
   constructor(status, message) {
@@ -40,6 +45,10 @@ function makePlayer(name) {
   return { id: crypto.randomUUID(), token: crypto.randomUUID(), name, score: 0 };
 }
 
+function hostOf(room) {
+  return room.screenHost ?? room.players[0];
+}
+
 function getSettings(input) {
   const { rounds, seconds, categories } = input;
   if (![5, 10].includes(rounds) || ![15, 20, 30].includes(seconds) ||
@@ -54,9 +63,10 @@ function getSettings(input) {
 function startSelection(room, now) {
   room.round += 1;
   room.phase = "select";
-  room.deadline = now + categoryTime;
+  room.deadline = now + (chooserFor(room).bot ? botTurnTime : categoryTime);
   room.question = null;
   room.answers = {};
+  room.botAnswers = [];
 }
 
 function chooserFor(room) {
@@ -86,63 +96,103 @@ function startQuestion(room, category, now) {
   };
   room.phase = "question";
   room.deadline = now + room.settings.seconds * 1000;
+  room.botAnswers = room.players.filter((player) => player.bot).map((player) => {
+    const correct = room.question.correctIndex;
+    const option = Math.random() < botAccuracy[room.settings.difficulty]
+      ? correct
+      : (correct + 1 + Math.floor(Math.random() * 3)) % 4;
+    return { id: player.id, option, at: now + 1800 + Math.floor(Math.random() * 6100) };
+  }).sort((first, second) => first.at - second.at);
 }
 
-function reveal(room) {
+function reveal(room, now) {
   for (const player of room.players) {
     if (room.answers[player.id] === room.question.correctIndex) player.score += 1;
   }
   room.phase = "reveal";
-  room.deadline = null;
+  room.deadline = now + revealTime;
+  room.botAnswers = [];
 }
 
 function advanceByClock(room, now) {
-  if (room.deadline === null || now < room.deadline) return false;
-  if (room.phase === "select") {
-    const questionStarts = room.deadline;
-    startQuestion(room, randomItem(availableCategories(room)), questionStarts);
-    if (now >= room.deadline) reveal(room);
-    return true;
+  let changed = false;
+  if (room.phase === "reveal" && room.deadline === null) {
+    room.deadline = now + revealTime;
+    changed = true;
   }
-  if (room.phase === "question") {
-    reveal(room);
-    return true;
+  for (;;) {
+    const nextBot = room.phase === "question" ? room.botAnswers?.[0] : null;
+    if (nextBot && nextBot.at <= now && nextBot.at < room.deadline) {
+      room.botAnswers.shift();
+      room.answers[nextBot.id] = nextBot.option;
+      if (Object.keys(room.answers).length === room.players.length) reveal(room, nextBot.at);
+      changed = true;
+      continue;
+    }
+    const deadline = room.deadline;
+    if (deadline === null || deadline > now) return changed;
+    if (room.phase === "select") startQuestion(room, randomItem(availableCategories(room)), deadline);
+    else if (room.phase === "question") reveal(room, deadline);
+    else if (room.phase === "reveal") {
+      if (room.round === room.settings.rounds) {
+        room.phase = "finished";
+        room.deadline = null;
+      } else startSelection(room, deadline);
+    } else return changed;
+    changed = true;
   }
-  return false;
 }
 
 function viewRoom(room, player, revision, now = Date.now()) {
+  const mode = room.mode ?? "online";
+  const display = room.screenHost?.id === player.id;
   const answered = Object.hasOwn(room.answers, player.id);
   const showAnswer = room.phase === "reveal";
   const question = room.question && (room.phase === "question" || showAnswer) ? {
     id: room.question.id,
     category: room.question.category,
-    prompt: room.question.prompt,
+    prompt: mode === "screen" && !display ? null : room.question.prompt,
     options: room.question.options,
     ...(showAnswer ? { correctIndex: room.question.correctIndex } : {})
   } : null;
 
   return {
     code: room.code, phase: room.phase, round: room.round, deadline: room.deadline, revision, now,
-    settings: room.settings, playerId: player.id, hostId: room.players[0].id,
-    players: room.players.map(({ id, name, score }) => ({ id, name, score })),
+    mode, display, settings: room.settings, playerId: player.id, hostId: hostOf(room).id,
+    players: room.players.map(({ id, name, score, bot }) => ({ id, name, score, bot: Boolean(bot) })),
     chooserId: room.phase === "select" ? chooserFor(room).id : null,
     available: room.phase === "select" ? availableCategories(room) : [],
     answeredCount: Object.keys(room.answers).length,
     yourAnswer: answered ? room.answers[player.id] : null,
-    question
+    question,
+    ...(mode === "online" ? { chat: room.chat ?? [] } : {})
   };
 }
 
 async function createRoom(db, input) {
-  const name = normalizeName(input.name);
+  const mode = input.mode ?? "online";
+  if (!modes.includes(mode)) throw new GameError(400, "اختر طريقة لعب من القائمة.");
+  const name = mode === "screen" ? "شاشة المجلس" : normalizeName(input.name);
   const settings = getSettings(input);
   const owner = makePlayer(name);
+  const players = mode === "screen" ? [] : [owner];
+  if (mode === "bots") {
+    if (!Number.isInteger(input.bots) || input.bots < 1 || input.bots > botNames.length ||
+        typeof input.difficulty !== "string" || !Object.hasOwn(botAccuracy, input.difficulty)) {
+      throw new GameError(400, "اختر عدد البوتات ومستواهم.");
+    }
+    settings.difficulty = input.difficulty;
+    for (const botName of shuffled(botNames).slice(0, input.bots)) {
+      const bot = makePlayer(botName === name ? botName + " الآلي" : botName);
+      players.push({ id: bot.id, name: bot.name, score: 0, bot: true });
+    }
+  }
   const now = Date.now();
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const code = randomCode();
     const room = {
-      code, settings, players: [owner], phase: "lobby", round: 0,
+      code, mode, settings, players, phase: "lobby", round: 0,
+      ...(mode === "screen" ? { screenHost: owner } : {}),
       deadline: null, used: [], seen: [], answers: {}, question: null
     };
     const saved = await db.prepare("INSERT OR IGNORE INTO rooms (code, expires_at, state) VALUES (?, ?, ?)")
@@ -156,7 +206,7 @@ async function createRoom(db, input) {
 }
 
 function requireHost(room, player) {
-  if (player.id !== room.players[0].id) throw new GameError(403, "هذا الخيار للمضيف.");
+  if (player.id !== hostOf(room).id) throw new GameError(403, "هذا الخيار للمضيف.");
 }
 
 function applyAction(room, player, action, input, now) {
@@ -174,18 +224,29 @@ function applyAction(room, player, action, input, now) {
     return true;
   }
   if (action === "answer") {
+    if (room.screenHost?.id === player.id) throw new GameError(403, "جاوب من جوالك بعد الانضمام للغرفة.");
     if (room.phase !== "question" || room.question.id !== input.questionId) throw new GameError(409, "انتهى وقت الإجابة.");
     if (!Number.isInteger(input.option) || input.option < 0 || input.option > 3) throw new GameError(400, "اختر إجابة من الخيارات.");
     if (Object.hasOwn(room.answers, player.id)) return false;
     room.answers[player.id] = input.option;
-    if (Object.keys(room.answers).length === room.players.length) reveal(room);
+    if (Object.keys(room.answers).length === room.players.length) reveal(room, now);
     return true;
   }
-  if (action === "next") {
-    requireHost(room, player);
-    if (room.phase !== "reveal" || room.round !== input.round) throw new GameError(409, "تغيّرت الجولة.");
-    if (room.round === room.settings.rounds) room.phase = "finished";
-    else startSelection(room, now);
+  if (action === "chat") {
+    if ((room.mode ?? "online") !== "online") throw new GameError(403, "الشات متاح في الغرف عن بُعد.");
+    if (typeof input.text !== "string" || typeof input.id !== "string" || !/^[0-9a-f-]{36}$/i.test(input.id)) {
+      throw new GameError(400, "اكتب رسالة قصيرة للشات.");
+    }
+    const text = input.text.trim().replace(/\s+/gu, " ");
+    if (!text || [...text].length > 240 || /[\p{Cc}\u202a-\u202e\u2066-\u2069]/u.test(text)) {
+      throw new GameError(400, "اكتب رسالة من ١ إلى ٢٤٠ حرفًا.");
+    }
+    room.chat ??= [];
+    if (room.chat.some((entry) => entry.id === input.id && entry.playerId === player.id)) return false;
+    if (now - (player.lastChatAt ?? -Infinity) < 1000) throw new GameError(429, "تمهّل شوي قبل إرسال رسالة ثانية.");
+    player.lastChatAt = now;
+    room.chat.push({ id: input.id, playerId: player.id, name: player.name, text, at: now });
+    if (room.chat.length > 75) room.chat.shift();
     return true;
   }
   if (action === "rematch") {
@@ -204,10 +265,13 @@ async function roomRequest(db, code, action, input, token) {
     const now = Date.now();
     if (!row || row.expires_at <= now) throw new GameError(404, "الغرفة غير موجودة أو انتهت صلاحيتها.");
     const room = JSON.parse(row.state);
-    let player = token ? room.players.find((entry) => entry.token === token) : null;
+    let player = token
+      ? (room.screenHost?.token === token ? room.screenHost : room.players.find((entry) => entry.token === token))
+      : null;
     let changed = false;
 
     if (action === "join" && !player) {
+      if (room.mode === "bots") throw new GameError(404, "ما لقينا الغرفة.");
       if (room.phase !== "lobby") throw new GameError(409, "المباراة بدأت. اطلب من المضيف رابط غرفة جديدة.");
       if (room.players.length >= maxPlayers) throw new GameError(409, "الغرفة ممتلئة.");
       const name = normalizeName(input.name);
@@ -270,10 +334,16 @@ async function handleApi(request, pathname, db) {
     return json(await createRoom(db, await readInput(request)), 201);
   }
 
-  const match = pathname.match(/^\/api\/rooms\/([23456789A-HJ-NP-Z]{6})(?:\/(join|start|category|answer|next|rematch))?$/);
+  const match = pathname.match(/^\/api\/rooms\/([23456789A-HJ-NP-Z]{6})(?:\/(invite|join|start|category|answer|chat|rematch))?$/);
   if (!match) throw new GameError(404, "الطلب غير موجود.");
   const [, code, action] = match;
   const token = request.headers.get("Authorization")?.match(/^Bearer ([0-9a-f-]{36})$/i)?.[1];
+  if (request.method === "GET" && action === "invite") {
+    const row = await db.prepare("SELECT expires_at, state FROM rooms WHERE code = ?").bind(code).first();
+    const mode = row && JSON.parse(row.state).mode || "online";
+    if (!row || row.expires_at <= Date.now() || mode === "bots") throw new GameError(404, "ما لقينا الغرفة.");
+    return json({ mode });
+  }
   if (request.method === "GET" && !action) return json(await roomRequest(db, code, "state", null, token));
   if (request.method === "POST" && action) return json(await roomRequest(db, code, action, await readInput(request), token));
   throw new GameError(405, "الطلب غير مدعوم.");
@@ -286,6 +356,8 @@ export default {
       if (pathname.startsWith("/api/")) return await handleApi(request, pathname, env.DB);
       if (request.method !== "GET" && request.method !== "HEAD") return new Response(null, { status: 405 });
       if (pathname === "/app.js") return response(assets.js, "text/javascript; charset=utf-8");
+      if (pathname === "/qrcode.js") return response(assets.qr, "text/javascript; charset=utf-8", { "Cache-Control": "public, max-age=3600" });
+      if (pathname === "/sound.js") return response(assets.sound, "text/javascript; charset=utf-8");
       if (pathname === "/style.css") return response(assets.css, "text/css; charset=utf-8");
       if (pathname === "/hero.webp" && assets.hero) {
         const bytes = Uint8Array.from(atob(assets.hero), (character) => character.charCodeAt(0));
