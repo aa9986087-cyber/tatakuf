@@ -1,5 +1,5 @@
-import qrcode from "/qrcode.js?v=2";
-import { playSound, soundEnabled, toggleSound, unlockSound } from "/sound.js?v=2";
+import qrcode from "/qrcode.js?v=3";
+import { playSound, soundEnabled, toggleSound, unlockSound } from "/sound.js?v=3";
 
 const categories = {
   general: { title: "معلومات عامة", icon: "✦" },
@@ -16,7 +16,7 @@ const modes = {
 };
 const phases = {
   lobby: "غرفة التحدّي", select: "اختيار الفئة", question: "وقت السؤال",
-  reveal: "نتيجة الجولة", finished: "النتيجة النهائية"
+  reveal: "نتيجة الجولة", finale: "لحظة الحسم", finished: "النتيجة النهائية"
 };
 const app = document.querySelector("#app");
 const dialog = document.querySelector("#dialog");
@@ -27,6 +27,7 @@ const format = (value) => number.format(value);
 const codePattern = /^[23456789A-HJ-NP-Z]{6}$/;
 const roomCode = window.location.pathname.split("/")[2]?.toUpperCase();
 const storageKey = `tahaddi-alrabaa:${roomCode}`;
+const historyKey = "tatakuf-question-history";
 const letters = ["أ", "ب", "ج", "د"];
 let room;
 let token = roomCode ? sessionStorage.getItem(storageKey) : null;
@@ -37,6 +38,7 @@ let toastTimeout;
 let lastTick;
 let stageKey;
 let chatKey;
+let seenQuestions = readHistory();
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({
@@ -47,16 +49,56 @@ const e = escapeHtml;
 const actionButton = (label, action, className = "primary", extra = "") =>
   `<button type="button" class="btn ${className}" data-action="${action}" ${extra}>${label}</button>`;
 
+function readHistory() {
+  try {
+    const value = JSON.parse(localStorage.getItem(historyKey) ?? "[]");
+    return new Set(Array.isArray(value) ? value : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function rememberQuestions(ids = []) {
+  if (!ids.some((id) => !seenQuestions.has(id))) return;
+  seenQuestions = new Set([...readHistory(), ...seenQuestions, ...ids]);
+  try { localStorage.setItem(historyKey, JSON.stringify([...seenQuestions])); } catch { /* Session history remains available. */ }
+}
+
+function questionHistory() {
+  seenQuestions = new Set([...readHistory(), ...seenQuestions]);
+  return Object.fromEntries(Object.entries(bankCounts).map(([id, count]) => {
+    const bytes = new Uint8Array(Math.ceil(count / 8));
+    for (let index = 0; index < count; index += 1) {
+      if (seenQuestions.has(id + "-" + index)) bytes[index >> 3] |= 1 << (index % 8);
+    }
+    return [id, btoa(String.fromCharCode(...bytes))];
+  }));
+}
+
+function remainingFor(category) {
+  let remainder = bankCounts[category];
+  for (let index = 0; index < bankCounts[category]; index += 1) {
+    if (seenQuestions.has(category + "-" + index)) remainder -= 1;
+  }
+  return remainder;
+}
+
+function updateBankCount(form) {
+  const picked = new FormData(form).getAll("category");
+  const remaining = picked.reduce((sum, category) => sum + remainingFor(category), 0);
+  form.querySelector("[data-bank-count]").textContent = `${format(remaining)} سؤال جديد في الفئات المختارة`;
+}
+
 function showHome() {
   app.innerHTML = `
     <section class="hero stage-in" aria-labelledby="home-title">
       <div class="hero-copy">
-        <p class="hero-kicker">مسابقة أسئلة للأصدقاء</p>
+        <p class="hero-kicker">${format(Object.values(bankCounts).reduce((total, count) => total + count, 0))} سؤال للتحدّي</p>
         <h1 id="home-title">لعبة <strong>التكاتف</strong></h1>
         <p class="lead">جمع ربعك على سؤال واحد. اختاروا الفئة وشوفوا من يجيبها.</p>
         ${actionButton("انضم برمز الغرفة", "join", "outline")}
       </div>
-      <div class="hero-art" aria-hidden="true"><img src="/hero.webp?v=2" width="900" height="600" alt="" fetchpriority="high"></div>
+      <div class="hero-art" aria-hidden="true"><img src="/hero.webp?v=3" width="900" height="600" alt="" fetchpriority="high"></div>
     </section>
     <section class="modes" aria-labelledby="modes-title">
       <div class="section-heading"><h2 id="modes-title">اختَر طريقة اللعب</h2></div>
@@ -82,6 +124,7 @@ function openDialog(title, description, html) {
 }
 
 function openCreate(mode) {
+  seenQuestions = new Set([...readHistory(), ...seenQuestions]);
   openDialog(modes[mode].title, modes[mode].description, `
     <form class="setup-form" data-form="create" data-mode="${mode}">
       ${mode === "screen" ? "" : nameField()}
@@ -93,15 +136,17 @@ function openCreate(mode) {
         <label class="field">مستوى البوتات<select name="difficulty"><option value="easy">سهل</option><option value="normal" selected>متوسط</option><option value="hard">صعب</option></select></label>
       </div>` : ""}
       <div class="form-row">
-        <label class="field">عدد الجولات<select name="rounds"><option value="5">٥ جولات</option><option value="10">١٠ جولات</option></select></label>
+        <label class="field">عدد الجولات<select name="rounds"><option value="5">٥ جولات</option><option value="10">١٠ جولات</option><option value="20">٢٠ جولة</option></select></label>
         <label class="field">وقت الإجابة<select name="seconds"><option value="15">١٥ ثانية</option><option value="20" selected>٢٠ ثانية</option><option value="30">٣٠ ثانية</option></select></label>
       </div>
       <fieldset><legend>الفئات</legend><div class="check-grid">${Object.entries(categories).map(([id, item]) =>
         `<label class="check-category"><input type="checkbox" name="category" value="${id}" checked>${item.title}</label>`
       ).join("")}</div></fieldset>
+      <p class="bank-count muted" data-bank-count></p>
       <p class="error" data-error role="alert"></p>
       <button class="btn primary" type="submit">${modes[mode].choice}</button>
     </form>`);
+  updateBankCount(dialog.querySelector('[data-form="create"]'));
 }
 
 function openHelp() {
@@ -109,7 +154,7 @@ function openHelp() {
     <li><strong>شاشة المجلس</strong> افتحها على الشاشة الكبيرة، وخَلّ اللاعبين يمسحون رمز QR بجوالاتهم.</li>
     <li><strong>عن بُعد</strong> شارك الرابط مع ربعك وافتحوا الشات في نفس الغرفة.</li>
     <li><strong>ضد البوتات</strong> اختر عدد الخصوم ومستواهم وابدأ التحدّي.</li>
-    <li>الاختيار بين الفئات بالدور، والإجابة الصحيحة بنقطة. بعد عرض الإجابة تبدأ الجولة التالية تلقائيًا.</li>
+    <li>الاختيار بين الفئات بالدور، والإجابة الصحيحة بنقطة. يظهر الترتيب وتبدأ الجولة التالية تلقائيًا، وبعد آخر سؤال تُكشف النتيجة النهائية.</li>
   </ol>`);
 }
 
@@ -233,46 +278,79 @@ function scores() {
 
 function questionView() {
   const item = room.question;
-  const revealed = room.phase === "reveal";
   const answered = room.yourAnswer !== null;
-  const correct = room.yourAnswer === item.correctIndex;
-  const outcome = room.display ? "الإجابة الصحيحة" : !answered ? "ما سجّلت إجابة" : correct ? "إجابة صحيحة! +١" : "إجابة غير صحيحة";
-  const progress = revealed ? (room.round === room.settings.rounds ? "النتيجة النهائية بعد لحظات" : "الجولة التالية تبدأ تلقائيًا")
-    : `${format(room.answeredCount)} من ${format(room.players.length)} جاوبوا`;
+  const progress = `${format(room.answeredCount)} من ${format(room.players.length)} جاوبوا`;
   return `<section class="panel question-card">
     ${timer()}
     <p class="eyebrow">${categories[item.category].title}</p>
     <h2 dir="auto">${item.prompt ? e(item.prompt) : "شوف السؤال على الشاشة"}</h2>
+    ${item.image ? `<img class="question-image" src="/questions/${e(item.image.file)}" alt="${e(item.image.alt)}" width="750" height="500">` : ""}
   </section>
   <div class="options" aria-label="خيارات الإجابة">${item.options.map((option, index) => {
-    const isCorrect = revealed && item.correctIndex === index;
     const selected = index === room.yourAnswer;
-    const style = isCorrect ? "correct" : selected ? (revealed ? "incorrect" : "selected") : "";
-    const mark = isCorrect ? "✓" : selected && revealed ? "×" : letters[index];
-    const content = `<span class="option-mark" aria-hidden="true">${mark}</span><bdi>${e(option)}</bdi>`;
+    const style = selected ? "selected" : "";
+    const content = `<span class="option-mark" aria-hidden="true">${letters[index]}</span><bdi>${e(option)}</bdi>`;
     if (room.display) return `<div class="option ${style}">${content}</div>`;
     return `<button type="button" class="option ${style}" data-action="answer" data-option="${index}"
-      ${answered || revealed || pending ? "disabled" : ""}>${content}</button>`;
+      ${answered || pending ? "disabled" : ""}>${content}</button>`;
   }).join("")}</div>
   <section class="panel feedback">
-    <div><h2>${revealed ? outcome : room.display ? "الإجابات من الجوالات" : answered ? "تم تسجيل إجابتك" : "اختر إجابة واحدة"}</h2>
-      ${revealed ? `<p class="muted"><bdi>${e(item.options[item.correctIndex])}</bdi></p>` : ""}</div>
+    <h2>${room.display ? "الإجابات من الجوالات" : answered ? "تم تسجيل إجابتك" : "اختر إجابة واحدة"}</h2>
     <p class="muted">${progress}</p>
   </section>${scores()}`;
 }
 
+function leaderboard(order, title) {
+  let rank = 1;
+  return `<section class="panel leaderboard"><h2>${title}</h2>
+    <ol class="rank-list">${order.map((player, index) => {
+      if (index && player.score !== order[index - 1].score) rank = index + 1;
+      return `<li class="rank-row rank-${rank}" style="--stagger:${index * 65}ms">
+        <span class="rank-medal" aria-label="المركز ${format(rank)}">${format(rank)}</span>
+        <span class="rank-name"><bdi>${e(player.name)}</bdi>${player.id === room.playerId ? '<small>أنت</small>' : ""}</span>
+        ${player.gained ? '<strong class="round-gain">+١</strong>' : ""}
+        <span class="rank-score">${format(player.score)} <small>نقطة</small></span>
+      </li>`;
+    }).join("")}</ol></section>`;
+}
+
+function roundResults() {
+  if (room.round === room.settings.rounds) return finale();
+  const item = room.question;
+  const correct = room.yourAnswer === item.correctIndex;
+  const outcome = room.display ? "الإجابة الصحيحة" : room.yourAnswer === null ? "انتهى وقت الإجابة" : correct ? "إجابة صحيحة" : "إجابة غير صحيحة";
+  const order = [...room.players].sort((a, b) => b.score - a.score);
+  return `<section class="panel round-answer">
+    <div><p class="eyebrow">${outcome}</p><h2><bdi>${e(item.options[item.correctIndex])}</bdi></h2></div>
+    <div><p class="muted">الجولة التالية تلقائيًا</p>${timer()}</div>
+  </section>${leaderboard(order, "ترتيب اللاعبين")}`;
+}
+
+function finale() {
+  return `<section class="panel finale-stage">
+    <div class="finale-orbit" aria-hidden="true"><span>؟</span></div>
+    <h2>من بطل التكاتف؟</h2>
+    ${timer()}
+  </section>`;
+}
+
 function finished() {
   const order = [...room.players].sort((a, b) => b.score - a.score);
-  const tied = order[0].score === order[1]?.score;
-  return `<section class="panel result-panel">
-    <p class="eyebrow">✦ ${tied ? "تعادل" : "فائز التحدّي"}</p>
-    <h2>${tied ? "انتهى التحدّي بالتعادل" : `<bdi>${e(order[0].name)}</bdi>`}</h2>
-    ${playersList(order, true, true)}
+  const winners = order.filter((player) => player.score === order[0].score);
+  const tied = winners.length > 1;
+  return `<section class="panel result-panel champion">
+    <div class="champion-sparks" aria-hidden="true">${Array.from({ length: 15 }, (_, index) =>
+      `<i style="--angle:${index * 24}deg;--delay:${index * 24}ms"></i>`
+    ).join("")}</div>
+    <div class="champion-mark" aria-hidden="true">✦</div>
+    <p class="eyebrow">${tied ? "تعادل على المركز الأول" : "بطل التكاتف"}</p>
+    <h2>${winners.map((winner) => `<bdi>${e(winner.name)}</bdi>`).join(" · ")}</h2>
+    ${room.lastAnswer ? `<p class="muted">إجابة السؤال الأخير <bdi>${e(room.lastAnswer)}</bdi></p>` : ""}
     <div class="actions">
       ${room.playerId === room.hostId ? actionButton("العبوا مرة ثانية", "rematch") : ""}
       <a class="btn outline" href="/">العودة للرئيسية</a>
     </div>
-  </section>`;
+  </section>${leaderboard(order, "الترتيب النهائي")}`;
 }
 
 function createRoomShell() {
@@ -314,7 +392,7 @@ function playPhaseSound(previous) {
   if (room.phase === "reveal") {
     const key = room.display || room.yourAnswer === room.question.correctIndex ? "correct" : "incorrect";
     playSound(key);
-  } else playSound({ lobby:"join", select:"select", question:"question", finished:"finished" }[room.phase]);
+  } else playSound({ lobby:"join", select:"select", question:"question", finale:"finale", finished:"finished" }[room.phase]);
 }
 
 function renderRoom(next, force = false) {
@@ -322,19 +400,20 @@ function renderRoom(next, force = false) {
   const previous = room;
   const phaseChanged = !previous || previous.phase !== next.phase || previous.round !== next.round;
   room = next;
+  rememberQuestions(next.seenQuestions);
   clockOffset = room.now - Date.now();
   if (!app.querySelector(".game-main")) {
     stageKey = chatKey = undefined;
     createRoomShell();
   }
   const body = app.querySelector(".game-main");
-  const { now, chat, revision, ...stageState } = room;
+  const { now, chat, revision, seenQuestions: history, ...stageState } = room;
   const key = JSON.stringify(stageState);
   if (stageKey !== key || force) {
     stageKey = key;
     const active = document.activeElement;
     const focus = body.contains(active) && active.dataset.action;
-    const view = { lobby, select:selection, question:questionView, reveal:questionView, finished }[room.phase]();
+    const view = { lobby, select:selection, question:questionView, reveal:roundResults, finale, finished }[room.phase]();
     body.innerHTML = view;
     const gameTitle = app.querySelector("#game-title");
     gameTitle.textContent = phases[room.phase];
@@ -366,7 +445,8 @@ function updateTimer() {
   const remaining = Math.max(0, room.deadline - (Date.now() + clockOffset));
   const seconds = Math.ceil(remaining / 1000);
   const chooser = room.players.find((player) => player.id === room.chooserId);
-  const duration = room.phase === "reveal" ? 5000 : room.phase === "select" ? (chooser?.bot ? 2200 : 15000) : room.settings.seconds * 1000;
+  const duration = room.phase === "finale" ? 5500 : room.phase === "reveal" ? 5000
+    : room.phase === "select" ? (chooser?.bot ? 2200 : 15000) : room.settings.seconds * 1000;
   const text = `${format(seconds)} ثانية`;
   if (label.textContent !== text) label.textContent = text;
   fill.style.width = `${Math.min(100, remaining / duration * 100)}%`;
@@ -475,6 +555,9 @@ async function fullscreen() {
 
 document.addEventListener("pointerdown", unlockSound, { passive: true });
 document.addEventListener("keydown", unlockSound);
+document.addEventListener("change", (event) => {
+  if (event.target.name === "category" && event.target.form?.dataset.form === "create") updateBankCount(event.target.form);
+});
 document.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-action]");
   if (!button) return;
@@ -533,12 +616,13 @@ document.addEventListener("submit", async (event) => {
       const mode = form.dataset.mode;
       const created = await api("/api/rooms", {
         mode, name: data.get("name"), rounds: Number(data.get("rounds")), seconds: Number(data.get("seconds")), categories: picked,
+        history: questionHistory(),
         ...(mode === "bots" ? { bots: Number(data.get("bots")), difficulty: data.get("difficulty") } : {})
       });
       sessionStorage.setItem(`tahaddi-alrabaa:${created.room.code}`, created.token);
       window.location.assign(`/room/${created.room.code}`);
     } else {
-      const joined = await api(`/api/rooms/${roomCode}/join`, { name: data.get("name") });
+      const joined = await api(`/api/rooms/${roomCode}/join`, { name: data.get("name"), history: questionHistory() });
       token = joined.token;
       sessionStorage.setItem(storageKey, token);
       renderRoom(joined.room);

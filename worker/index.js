@@ -3,6 +3,7 @@ const day = 86_400_000;
 const categoryTime = 15_000;
 const maxPlayers = 8;
 const revealTime = 5_000;
+const finaleTime = 5_500;
 const botTurnTime = 2_200;
 const modes = ["screen", "online", "bots"];
 const botNames = ["برق", "نجم", "لمعة", "صقر", "رعد", "شعلة", "وميض"];
@@ -51,7 +52,7 @@ function hostOf(room) {
 
 function getSettings(input) {
   const { rounds, seconds, categories } = input;
-  if (![5, 10].includes(rounds) || ![15, 20, 30].includes(seconds) ||
+  if (![5, 10, 20].includes(rounds) || ![15, 20, 30].includes(seconds) ||
       !Array.isArray(categories) || !categories.length || categories.length > Object.keys(questions).length ||
       new Set(categories).size !== categories.length ||
       categories.some((id) => typeof id !== "string" || !Object.hasOwn(questions, id))) {
@@ -74,25 +75,59 @@ function chooserFor(room) {
 }
 
 function availableCategories(room) {
+  const seen = new Set(room.seen);
   return room.settings.categories.filter((category) =>
-    questions[category].some((_, index) => !room.used.includes(category + "-" + index))
+    questions[category].some((_, index) => !seen.has(category + "-" + index))
   );
 }
 
+function addHistory(room, packedHistory) {
+  if (packedHistory === undefined) return;
+  if (!packedHistory || typeof packedHistory !== "object" || Array.isArray(packedHistory)) {
+    throw new GameError(400, "تعذّر قراءة سجل الأسئلة.");
+  }
+  const seen = new Set(room.seen);
+  for (const category of room.settings.categories) {
+    const encoded = packedHistory[category];
+    if (encoded === undefined) continue;
+    const limit = questions[category].length;
+    if (typeof encoded !== "string" || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded) ||
+        encoded.length % 4 !== 0 || encoded.length > Math.ceil(limit / 24) * 4) {
+      throw new GameError(400, "تعذّر قراءة سجل الأسئلة.");
+    }
+    const bytes = atob(encoded);
+    for (let index = 0; index < Math.min(limit, bytes.length * 8); index += 1) {
+      if (bytes.charCodeAt(index >> 3) & (1 << (index % 8))) seen.add(category + "-" + index);
+    }
+  }
+  room.seen = [...seen];
+}
+
+function requireEnoughQuestions(room) {
+  const seen = new Set(room.seen);
+  let remaining = 0;
+  for (const category of room.settings.categories) {
+    remaining += questions[category].filter((_, index) => !seen.has(category + "-" + index)).length;
+  }
+  if (remaining < room.settings.rounds) {
+    throw new GameError(409, "الأسئلة الجديدة ما تكفي للجولات المختارة. جرّب فئات أكثر أو جولات أقل.");
+  }
+}
+
 function startQuestion(room, category, now) {
-  const pool = questions[category].map((data, index) => ({
-    id: category + "-" + index,
-    prompt: data[0],
-    correct: data[1],
-    options: shuffled(data.slice(1))
-  })).filter((item) => !room.used.includes(item.id));
-  const fresh = pool.filter((item) => !room.seen.includes(item.id));
-  const item = randomItem(fresh.length ? fresh : pool);
-  room.used.push(item.id);
-  if (!room.seen.includes(item.id)) room.seen.push(item.id);
+  const seen = new Set(room.seen);
+  const eligible = questions[category].flatMap((_, index) => seen.has(category + "-" + index) ? [] : [index]);
+  const visual = room.round === 1 || room.round % 5 === 0
+    ? eligible.filter((index) => questions[category][index][5])
+    : [];
+  const index = randomItem(visual.length ? visual : eligible);
+  const [prompt, correct, second, third, fourth, image] = questions[category][index];
+  const id = category + "-" + index;
+  const options = shuffled([correct, second, third, fourth]);
+  room.used.push(id);
+  room.seen.push(id);
   room.question = {
-    id: item.id, category, prompt: item.prompt, options: item.options,
-    correctIndex: item.options.indexOf(item.correct)
+    id, category, prompt, options, correctIndex: options.indexOf(correct), image
   };
   room.phase = "question";
   room.deadline = now + room.settings.seconds * 1000;
@@ -109,8 +144,9 @@ function reveal(room, now) {
   for (const player of room.players) {
     if (room.answers[player.id] === room.question.correctIndex) player.score += 1;
   }
-  room.phase = "reveal";
-  room.deadline = now + revealTime;
+  const finalRound = room.round === room.settings.rounds;
+  room.phase = finalRound ? "finale" : "reveal";
+  room.deadline = now + (finalRound ? finaleTime : revealTime);
   room.botAnswers = [];
 }
 
@@ -133,11 +169,10 @@ function advanceByClock(room, now) {
     if (deadline === null || deadline > now) return changed;
     if (room.phase === "select") startQuestion(room, randomItem(availableCategories(room)), deadline);
     else if (room.phase === "question") reveal(room, deadline);
-    else if (room.phase === "reveal") {
-      if (room.round === room.settings.rounds) {
-        room.phase = "finished";
-        room.deadline = null;
-      } else startSelection(room, deadline);
+    else if (room.phase === "reveal" && room.round < room.settings.rounds) startSelection(room, deadline);
+    else if (room.phase === "finale" || room.phase === "reveal") {
+      room.phase = "finished";
+      room.deadline = null;
     } else return changed;
     changed = true;
   }
@@ -148,10 +183,13 @@ function viewRoom(room, player, revision, now = Date.now()) {
   const display = room.screenHost?.id === player.id;
   const answered = Object.hasOwn(room.answers, player.id);
   const showAnswer = room.phase === "reveal";
+  const showStandings = room.phase !== "finale" && !(showAnswer && room.round === room.settings.rounds);
+  const showVisual = mode !== "screen" || display;
   const question = room.question && (room.phase === "question" || showAnswer) ? {
     id: room.question.id,
     category: room.question.category,
-    prompt: mode === "screen" && !display ? null : room.question.prompt,
+    prompt: showVisual ? room.question.prompt : null,
+    ...(showVisual && room.question.image ? { image: room.question.image } : {}),
     options: room.question.options,
     ...(showAnswer ? { correctIndex: room.question.correctIndex } : {})
   } : null;
@@ -159,12 +197,17 @@ function viewRoom(room, player, revision, now = Date.now()) {
   return {
     code: room.code, phase: room.phase, round: room.round, deadline: room.deadline, revision, now,
     mode, display, settings: room.settings, playerId: player.id, hostId: hostOf(room).id,
-    players: room.players.map(({ id, name, score, bot }) => ({ id, name, score, bot: Boolean(bot) })),
+    players: room.players.map(({ id, name, score, bot }) => ({
+      id, name, bot: Boolean(bot),
+      ...(showStandings ? { score } : {}),
+      ...(showAnswer && showStandings ? { gained: Number(room.answers[id] === room.question?.correctIndex) } : {})
+    })),
     chooserId: room.phase === "select" ? chooserFor(room).id : null,
     available: room.phase === "select" ? availableCategories(room) : [],
     answeredCount: Object.keys(room.answers).length,
-    yourAnswer: answered ? room.answers[player.id] : null,
-    question,
+    yourAnswer: answered && room.phase !== "finale" ? room.answers[player.id] : null,
+    question, seenQuestions: room.used,
+    ...(room.phase === "finished" && room.question ? { lastAnswer: room.question.options[room.question.correctIndex] } : {}),
     ...(mode === "online" ? { chat: room.chat ?? [] } : {})
   };
 }
@@ -195,6 +238,8 @@ async function createRoom(db, input) {
       ...(mode === "screen" ? { screenHost: owner } : {}),
       deadline: null, used: [], seen: [], answers: {}, question: null
     };
+    addHistory(room, input.history);
+    requireEnoughQuestions(room);
     const saved = await db.prepare("INSERT OR IGNORE INTO rooms (code, expires_at, state) VALUES (?, ?, ?)")
       .bind(code, now + day, JSON.stringify(room)).run();
     if (saved.meta.changes) {
@@ -213,6 +258,7 @@ function applyAction(room, player, action, input, now) {
   if (action === "start") {
     requireHost(room, player);
     if (room.phase !== "lobby" || room.players.length < 2) throw new GameError(409, "تحتاج لاعبين على الأقل لبدء المباراة.");
+    requireEnoughQuestions(room);
     startSelection(room, now);
     return true;
   }
@@ -252,6 +298,7 @@ function applyAction(room, player, action, input, now) {
   if (action === "rematch") {
     requireHost(room, player);
     if (room.phase !== "finished") throw new GameError(409, "المباراة الحالية ما انتهت.");
+    requireEnoughQuestions(room);
     Object.assign(room, { phase: "lobby", round: 0, used: [], answers: {}, question: null });
     for (const entry of room.players) entry.score = 0;
     return true;
@@ -278,6 +325,8 @@ async function roomRequest(db, code, action, input, token) {
       if (room.players.some((entry) => entry.name.toLocaleLowerCase("ar") === name.toLocaleLowerCase("ar"))) {
         throw new GameError(409, "الاسم مستخدم في الغرفة. جرّب اسمًا ثانيًا.");
       }
+      addHistory(room, input.history);
+      requireEnoughQuestions(room);
       player = makePlayer(name);
       room.players.push(player);
       changed = true;
@@ -362,6 +411,11 @@ export default {
       if (pathname === "/hero.webp" && assets.hero) {
         const bytes = Uint8Array.from(atob(assets.hero), (character) => character.charCodeAt(0));
         return response(bytes, "image/webp", { "Cache-Control": "public, max-age=3600" });
+      }
+      const image = pathname.match(/^\/questions\/([a-z0-9-]+\.webp)$/)?.[1];
+      if (image && Object.hasOwn(assets.questionImages, image)) {
+        const bytes = Uint8Array.from(atob(assets.questionImages[image]), (character) => character.charCodeAt(0));
+        return response(bytes, "image/webp", { "Cache-Control": "public, max-age=86400" });
       }
       if (pathname === "/favicon.ico") return new Response(null, { status: 204 });
       if (pathname === "/" || /^\/room\/[23456789A-HJ-NP-Z]{6}\/?$/i.test(pathname)) {

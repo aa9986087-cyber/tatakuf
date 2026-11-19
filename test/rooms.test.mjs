@@ -63,9 +63,23 @@ test("two independent players complete a match and rematch with fresh questions"
     assert.equal((await host("/answer", answer(option))).data.room.yourAnswer, option);
     assert.equal((await host("/answer", answer(invalidOption))).data.room.yourAnswer, option);
     const revealed = (await guest("/answer", answer(option))).data.room;
+    if (round === 5) {
+      assert.equal(revealed.phase, "finale");
+      assert.equal(revealed.question, null);
+      assert.equal(revealed.yourAnswer, null);
+      assert.equal(revealed.players.some((player) => Object.hasOwn(player, "score")), false);
+      assert.equal(revealed.lastAnswer, undefined);
+      t.mock.timers.tick(5499);
+      assert.equal((await host()).data.room.phase, "finale");
+      t.mock.timers.tick(1);
+      state = (await host()).data.room;
+      assert.equal(state.lastAnswer, answerText);
+      continue;
+    }
     assert.equal(revealed.phase, "reveal");
     assert.equal(revealed.question.correctIndex, option);
     assert.deepEqual(revealed.players.map(({ score }) => score), [round, round]);
+    assert.deepEqual(revealed.players.map(({ gained }) => gained), [1, 1]);
     assert.deepEqual((await host()).data.room.players, revealed.players);
     t.mock.timers.tick(4999);
     assert.equal((await guest()).data.room.phase, "reveal");
@@ -79,6 +93,58 @@ test("two independent players complete a match and rematch with fresh questions"
   await host("/start", {});
   const next = (await host("/category", { round: 1, category: "science" })).data.room;
   assert.equal(seen.has(next.question.id), false);
+});
+
+test("the bank contains thousands of unique questions and displays illustrated questions safely", async (t) => {
+  assert.ok(Object.values(bank).flat().length >= 3000);
+  const { request } = await setup(t);
+  const created = await request("", { mode: "screen", rounds: 20, seconds: 20, categories: ["culture"] });
+  const path = `/${created.data.room.code}`;
+  const display = (action = "", body) => request(path + action, body, created.data.token);
+  const first = await request(path + "/join", { name: "بدر" });
+  await request(path + "/join", { name: "فيصل" });
+  await display("/start", {});
+  const phone = await request(path + "/category", { round: 1, category: "culture" }, first.data.token);
+  assert.equal(phone.data.room.question.image, undefined);
+  const screenImage = (await display()).data.room.question.image;
+  assert.ok(screenImage.alt);
+  const asset = await worker.fetch(new Request(`https://quiz.example/questions/${screenImage.file}`), {});
+  assert.equal(asset.status, 200);
+  assert.equal(asset.headers.get("content-type"), "image/webp");
+  assert.ok((await asset.arrayBuffer()).byteLength > 1000);
+});
+
+test("a 20-round match samples only unseen questions and refuses a repeat after exhaustion", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 600_000 });
+  const { request } = await setup(t);
+  const pack = (indices) => {
+    const bytes = Buffer.alloc(Math.ceil(bank.general.length / 8));
+    for (const index of indices) bytes[index >> 3] |= 1 << (index % 8);
+    return { general: bytes.toString("base64") };
+  };
+  const history = pack(Array.from({ length: bank.general.length - 21 }, (_, index) => index + 21));
+  const created = await request("", { mode: "online", name: "بدر", rounds: 20, seconds: 15, categories: ["general"], history });
+  const path = `/${created.data.room.code}`;
+  const host = (action = "", body) => request(path + action, body, created.data.token);
+  const joined = await request(path + "/join", { name: "فيصل", history: pack([0]) });
+  assert.equal(joined.status, 200);
+  assert.equal((await host("/start", {})).data.room.phase, "select");
+  const observed = new Set();
+  for (let round = 1; round <= 20; round += 1) {
+    t.mock.timers.tick(15_000);
+    const state = (await host()).data.room;
+    assert.equal(state.phase, "question");
+    assert.equal(state.round, round);
+    assert.notEqual(state.question.id, "general-0");
+    assert.ok(Number(state.question.id.split("-")[1]) <= 20);
+    assert.equal(observed.has(state.question.id), false);
+    assert.equal(state.seenQuestions.length, round);
+    observed.add(state.question.id);
+    t.mock.timers.tick(15_000 + (round === 20 ? 5500 : 5000));
+  }
+  assert.equal(observed.size, 20);
+  assert.equal((await host()).data.room.phase, "finished");
+  assert.equal((await host("/rematch", {})).status, 409);
 });
 
 test("online chat is scoped to room members, accepts simultaneous senders, and deduplicates retries", async (t) => {
