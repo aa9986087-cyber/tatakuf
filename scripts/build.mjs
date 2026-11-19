@@ -1,9 +1,11 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 
 export async function build() {
-  const [html, css, js, hero, bank, worker, manifest, migration] = await Promise.all([
+  const [html, css, js, sound, qr, hero, bank, worker, manifest, migration] = await Promise.all([
     readFile("ui/index.html", "utf8"), readFile("ui/style.css", "utf8"),
-    readFile("ui/app.js", "utf8"), readFile("ui/hero.webp"), readFile("worker/questions.json", "utf8"),
+    readFile("ui/app.js", "utf8"), readFile("ui/sound.js", "utf8"),
+    readFile(new URL(import.meta.resolve("qrcode-generator")), "utf8"),
+    readFile("ui/hero.webp"), readFile("worker/questions.json", "utf8"),
     readFile("worker/index.js", "utf8"), readFile(".openai/hosting.json", "utf8"),
     readFile("drizzle/0000_rooms.sql", "utf8")
   ]);
@@ -26,7 +28,7 @@ export async function build() {
     mkdir("dist/.openai", { recursive: true }),
     mkdir("dist/drizzle", { recursive: true })
   ]);
-  const assets = { html, css, js, hero: hero.toString("base64") };
+  const assets = { html, css, js, sound, qr, hero: hero.toString("base64") };
   await Promise.all([
     writeFile("dist/server/index.js", `const assets = ${JSON.stringify(assets)};\nconst questions = ${JSON.stringify(questions)};\n${worker}`),
     writeFile("dist/.openai/hosting.json", manifest),

@@ -3,28 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#171127">
-  <meta name="description" content="تحدَّ ربعك في لعبة أسئلة عربية. أنشئ غرفة، شارك الرابط، وتنافسوا على النقاط.">
-  <title>تحدّي الربع | لعبة أسئلة للأصدقاء</title>
-  <link rel="stylesheet" href="/style.css">
-  <script src="/app.js" defer></script>
+  <meta name="theme-color" content="#091812">
+  <meta name="description" content="لعبة التكاتف، مسابقة أسئلة من الرافعية. العب على شاشة المجلس أو مع ربعك عن بُعد أو تحدَّ البوتات.">
+  <title>لعبة التكاتف | تحدّي الأسئلة</title>
+  <link rel="stylesheet" href="/style.css?v=2">
+  <script type="module" src="/app.js?v=2"></script>
 </head>
 <body>
-  <header class="topbar wrap">
-    <a class="brand" href="/" aria-label="تحدّي الربع، الرئيسية">
-      <span class="brand-mark" aria-hidden="true">؟</span>
-      <span>تحدّي <strong>الربع</strong></span>
+  <header class="topbar shell">
+    <a class="wordmark" href="/" aria-label="لعبة التكاتف، الرئيسية">
+      <span class="brand-icon" aria-hidden="true">ت</span>
+      <span>لعبة <strong>التكاتف</strong></span>
     </a>
-    <button type="button" class="quiet help-button" data-action="help"><span aria-hidden="true" class="help-mark">؟</span> طريقة اللعب</button>
+    <div class="nav-actions">
+      <button type="button" class="nav-button" data-action="sound" aria-pressed="true"><span aria-hidden="true">♫</span><span data-sound-label>الصوت</span></button>
+      <button type="button" class="nav-button" data-action="help"><span aria-hidden="true">؟</span><span>طريقة اللعب</span></button>
+    </div>
   </header>
-  <main class="wrap" id="app" aria-busy="false"></main>
-  <footer class="wrap footer">
-    <span>تحدّي الربع</span><span>لعبة أسئلة للأصدقاء</span>
+  <main class="shell" id="app"></main>
+  <footer class="shell footer">
+    <span class="footer-brand"><span class="small-mark" aria-hidden="true">✦</span> لعبة التكاتف</span>
+    <span class="signature">صُمّمت في <strong>الرافعية</strong> على يد <bdi>Vamos</bdi></span>
   </footer>
-  <dialog id="dialog" class="dialog" aria-labelledby="dialog-title">
-    <div id="dialog-content"></div>
-  </dialog>
+  <dialog id="dialog" class="dialog" aria-labelledby="dialog-title"><div id="dialog-content"></div></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <noscript><p class="wrap">فعّل JavaScript عشان تقدر تلعب.</p></noscript>
+  <noscript><p class="shell">فعّل JavaScript عشان تقدر تلعب.</p></noscript>
 </body>
 </html>
