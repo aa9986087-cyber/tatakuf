@@ -3,8 +3,11 @@ const day = 86_400_000;
 const categoryTime = 15_000;
 const maxPlayers = 8;
 const revealTime = 5_000;
+const bluffRevealTime = 9_000;
 const finaleTime = 5_500;
 const botTurnTime = 2_200;
+const writeExtraTime = 15_000;
+const formats = ["classic", "bluff"];
 const modes = ["screen", "online", "bots"];
 const botNames = ["برق", "نجم", "لمعة", "صقر", "رعد", "شعلة", "وميض"];
 const botAccuracy = { easy: 0.36, normal: 0.60, hard: 0.83 };
@@ -75,13 +78,25 @@ function seatLegacyDisplay(room, input) {
 
 function getSettings(input) {
   const { rounds, seconds, categories } = input;
-  if (![5, 10, 20].includes(rounds) || ![15, 20, 30].includes(seconds) ||
+  const format = input.format ?? "classic";
+  if (!formats.includes(format) || ![5, 10, 20].includes(rounds) || ![15, 20, 30].includes(seconds) ||
       !Array.isArray(categories) || !categories.length || categories.length > Object.keys(questions).length ||
       new Set(categories).size !== categories.length ||
       categories.some((id) => typeof id !== "string" || !Object.hasOwn(questions, id))) {
     throw new GameError(400, "اختر فئة واحدة على الأقل وتحقق من إعدادات الجولة.");
   }
-  return { rounds, seconds, categories };
+  return { rounds, seconds, categories, format };
+}
+
+const isBluff = (room) => room.settings.format === "bluff";
+
+// Compare answers loosely: spacing, punctuation, diacritics and common Arabic letter variants do not count.
+function answerKey(value) {
+  return value.normalize("NFKC").toLocaleLowerCase("ar")
+    .replace(/[\u064B-\u065F\u0670\u0640]/gu, "")
+    .replace(/[أإآٱ]/gu, "ا").replace(/ى/gu, "ي").replace(/ة/gu, "ه").replace(/ؤ/gu, "و").replace(/ئ/gu, "ي")
+    .replace(/[٠-٩]/gu, (digit) => String(digit.charCodeAt(0) - 0x0660))
+    .replace(/[\p{P}\p{S}\s]+/gu, "");
 }
 
 function startSelection(room, now) {
@@ -146,9 +161,20 @@ function startQuestion(room, category, now) {
   const index = randomItem(visual.length ? visual : eligible);
   const [prompt, correct, second, third, fourth, image] = questions[category][index];
   const id = category + "-" + index;
-  const options = shuffled([correct, second, third, fourth]);
   room.used.push(id);
   room.seen.push(id);
+  if (isBluff(room)) {
+    room.question = { id, category, prompt, image, correct, decoys: shuffled([second, third, fourth]) };
+    room.phase = "write";
+    room.deadline = now + room.settings.seconds * 1000 + writeExtraTime;
+    room.answers = {};
+    room.fakes = {};
+    room.botAnswers = room.players.filter((player) => player.bot).map((player, index) => ({
+      id: player.id, fake: room.question.decoys[index % 3], at: now + 3000 + Math.floor(Math.random() * 9000)
+    })).sort((first, other) => first.at - other.at);
+    return;
+  }
+  const options = shuffled([correct, second, third, fourth]);
   room.question = {
     id, category, prompt, options, correctIndex: options.indexOf(correct), image
   };
@@ -163,35 +189,78 @@ function startQuestion(room, category, now) {
   }).sort((first, second) => first.at - second.at);
 }
 
-function reveal(room, now) {
+// Build the vote: the right answer, each distinct fake (shared by everyone who wrote it), and house
+// decoys from the question bank so there are always at least four choices.
+function startVote(room, now) {
+  const question = room.question;
+  const entries = [{ text: question.correct, authors: [] }];
   for (const player of room.players) {
-    if (room.answers[player.id] === room.question.correctIndex) player.score += 1;
+    const fake = room.fakes[player.id];
+    if (fake === undefined) continue;
+    const entry = entries.find((item) => item !== entries[0] && answerKey(item.text) === answerKey(fake));
+    if (entry) entry.authors.push(player.id);
+    else entries.push({ text: fake, authors: [player.id] });
   }
+  for (const decoy of question.decoys) {
+    if (entries.length >= 4) break;
+    if (!entries.some((item) => answerKey(item.text) === answerKey(decoy))) entries.push({ text: decoy, authors: [] });
+  }
+  const order = shuffled(entries);
+  question.options = order.map((item) => item.text);
+  question.authors = order.map((item) => item.authors);
+  question.correctIndex = order.indexOf(entries[0]);
+  room.phase = "vote";
+  room.deadline = now + room.settings.seconds * 1000;
+  room.answers = {};
+  room.botAnswers = room.players.filter((player) => player.bot).map((player) => {
+    const allowed = question.options.map((_, index) => index).filter((index) => !question.authors[index].includes(player.id));
+    const wrong = allowed.filter((index) => index !== question.correctIndex);
+    const option = Math.random() < botAccuracy[room.settings.difficulty] || !wrong.length ? question.correctIndex : randomItem(wrong);
+    return { id: player.id, option, at: now + 1800 + Math.floor(Math.random() * 6100) };
+  }).sort((first, other) => first.at - other.at);
+}
+
+function reveal(room, now) {
+  room.gained = {};
+  for (const player of room.players) {
+    const option = room.answers[player.id];
+    if (option === room.question.correctIndex) room.gained[player.id] = (room.gained[player.id] ?? 0) + (isBluff(room) ? 2 : 1);
+    else if (option !== undefined && isBluff(room)) {
+      for (const author of room.question.authors[option]) room.gained[author] = (room.gained[author] ?? 0) + 1;
+    }
+  }
+  for (const player of room.players) player.score += room.gained[player.id] ?? 0;
   const finalRound = room.round === room.settings.rounds;
   room.phase = finalRound ? "finale" : "reveal";
-  room.deadline = now + (finalRound ? finaleTime : revealTime);
+  room.deadline = now + (finalRound ? finaleTime : isBluff(room) ? bluffRevealTime : revealTime);
   room.botAnswers = [];
 }
 
 function advanceByClock(room, now) {
   let changed = false;
   if (room.phase === "reveal" && room.deadline === null) {
-    room.deadline = now + revealTime;
+    room.deadline = now + (isBluff(room) ? bluffRevealTime : revealTime);
     changed = true;
   }
   for (;;) {
-    const nextBot = room.phase === "question" ? room.botAnswers?.[0] : null;
+    const nextBot = ["question", "write", "vote"].includes(room.phase) ? room.botAnswers?.[0] : null;
     if (nextBot && nextBot.at <= now && nextBot.at < room.deadline) {
       room.botAnswers.shift();
-      room.answers[nextBot.id] = nextBot.option;
-      if (Object.keys(room.answers).length === room.players.length) reveal(room, nextBot.at);
+      if (room.phase === "write") {
+        room.fakes[nextBot.id] = nextBot.fake;
+        if (Object.keys(room.fakes).length === room.players.length) startVote(room, nextBot.at);
+      } else {
+        room.answers[nextBot.id] = nextBot.option;
+        if (Object.keys(room.answers).length === room.players.length) reveal(room, nextBot.at);
+      }
       changed = true;
       continue;
     }
     const deadline = room.deadline;
     if (deadline === null || deadline > now) return changed;
     if (room.phase === "select") startQuestion(room, randomItem(availableCategories(room)), deadline);
-    else if (room.phase === "question") reveal(room, deadline);
+    else if (room.phase === "question" || room.phase === "vote") reveal(room, deadline);
+    else if (room.phase === "write") startVote(room, deadline);
     else if (room.phase === "reveal" && room.round < room.settings.rounds) startSelection(room, deadline);
     else if (room.phase === "finale" || room.phase === "reveal") {
       room.phase = "finished";
@@ -207,14 +276,25 @@ function viewRoom(room, player, revision, now = Date.now()) {
   const answered = Object.hasOwn(room.answers, player.id);
   const showAnswer = room.phase === "reveal";
   const showStandings = room.phase !== "finale" && !(showAnswer && room.round === room.settings.rounds);
-  const showVisual = mode !== "screen" || display;
-  const question = room.question && (room.phase === "question" || showAnswer) ? {
+  // Phones in the shared-screen mode also get picture questions, so players can zoom in up close.
+  const showVisual = mode !== "screen" || display || Boolean(room.question?.image);
+  const bluff = isBluff(room);
+  const nameOf = (id) => room.players.find((entry) => entry.id === id)?.name ?? "";
+  const question = room.question && (["question", "write", "vote"].includes(room.phase) || showAnswer) ? {
     id: room.question.id,
     category: room.question.category,
     prompt: showVisual ? room.question.prompt : null,
     ...(showVisual && room.question.image ? { image: room.question.image } : {}),
-    options: room.question.options,
-    ...(showAnswer ? { correctIndex: room.question.correctIndex } : {})
+    ...(room.phase !== "write" ? { options: room.question.options } : {}),
+    ...(showAnswer ? { correctIndex: room.question.correctIndex } : {}),
+    ...(bluff && room.phase === "vote" ? {
+      ownOptions: room.question.authors.flatMap((authors, index) => authors.includes(player.id) ? [index] : [])
+    } : {}),
+    ...(bluff && showAnswer ? {
+      authors: room.question.authors.map((authors) => authors.map(nameOf)),
+      voters: room.question.options.map((_, index) =>
+        room.players.filter((entry) => room.answers[entry.id] === index).map((entry) => entry.name))
+    } : {})
   } : null;
 
   return {
@@ -223,12 +303,15 @@ function viewRoom(room, player, revision, now = Date.now()) {
     players: room.players.map(({ id, name, score, bot }) => ({
       id, name, bot: Boolean(bot),
       ...(showStandings ? { score } : {}),
-      ...(showAnswer && showStandings ? { gained: Number(room.answers[id] === room.question?.correctIndex) } : {})
+      ...(showAnswer && showStandings ? {
+        gained: room.gained ? room.gained[id] ?? 0 : Number(room.answers[id] === room.question?.correctIndex)
+      } : {})
     })),
     chooserId: room.phase === "select" ? chooserFor(room).id : null,
     available: room.phase === "select" ? availableCategories(room) : [],
-    answeredCount: Object.keys(room.answers).length,
-    yourAnswer: answered && room.phase !== "finale" ? room.answers[player.id] : null,
+    answeredCount: Object.keys(room.phase === "write" ? room.fakes : room.answers).length,
+    yourAnswer: answered && room.phase !== "finale" && room.phase !== "write" ? room.answers[player.id] : null,
+    ...(room.phase === "write" ? { yourFake: room.fakes[player.id] ?? null } : {}),
     question, seenQuestions: room.used,
     ...(room.phase === "finished" && room.question ? { lastAnswer: room.question.options[room.question.correctIndex] } : {}),
     ...(mode === "online" ? { chat: room.chat ?? [] } : {})
@@ -292,11 +375,32 @@ function applyAction(room, player, action, input, now) {
     startQuestion(room, input.category, now);
     return true;
   }
+  if (action === "fake") {
+    if (room.screenHost?.id === player.id) throw new GameError(403, "سجّل اسمك في الغرفة أولًا عشان تشارك.");
+    if (room.phase !== "write" || room.question.id !== input.questionId) throw new GameError(409, "انتهى وقت كتابة الخدعة.");
+    const text = typeof input.text === "string" ? input.text.trim().replace(/\s+/gu, " ") : "";
+    if (!text || [...text].length > 40 || /[\p{Cc}\u202a-\u202e\u2066-\u2069]/u.test(text) || !answerKey(text)) {
+      throw new GameError(400, "اكتب خدعة من ١ إلى ٤٠ حرفًا.");
+    }
+    if (Object.hasOwn(room.fakes, player.id)) return false;
+    if (answerKey(text) === answerKey(room.question.correct)) {
+      throw new GameError(409, "هذي هي الإجابة الصحيحة! اكتب خدعة ثانية تضيّع فيها الباقين.");
+    }
+    room.fakes[player.id] = text;
+    if (Object.keys(room.fakes).length === room.players.length) startVote(room, now);
+    return true;
+  }
   if (action === "answer") {
     if (room.screenHost?.id === player.id) throw new GameError(403, "سجّل اسمك في الغرفة أولًا عشان تجاوب.");
-    if (room.phase !== "question" || room.question.id !== input.questionId) throw new GameError(409, "انتهى وقت الإجابة.");
-    if (!Number.isInteger(input.option) || input.option < 0 || input.option > 3) throw new GameError(400, "اختر إجابة من الخيارات.");
+    const answerPhase = isBluff(room) ? "vote" : "question";
+    if (room.phase !== answerPhase || room.question.id !== input.questionId) throw new GameError(409, "انتهى وقت الإجابة.");
+    if (!Number.isInteger(input.option) || input.option < 0 || input.option >= room.question.options.length) {
+      throw new GameError(400, "اختر إجابة من الخيارات.");
+    }
     if (Object.hasOwn(room.answers, player.id)) return false;
+    if (isBluff(room) && room.question.authors[input.option].includes(player.id)) {
+      throw new GameError(403, "هذي خدعتك. اختر الإجابة اللي تحسبها صحيحة.");
+    }
     room.answers[player.id] = input.option;
     if (Object.keys(room.answers).length === room.players.length) reveal(room, now);
     return true;
@@ -322,7 +426,7 @@ function applyAction(room, player, action, input, now) {
     requireHost(room, player);
     if (room.phase !== "finished") throw new GameError(409, "المباراة الحالية ما انتهت.");
     requireEnoughQuestions(room);
-    Object.assign(room, { phase: "lobby", round: 0, used: [], answers: {}, question: null });
+    Object.assign(room, { phase: "lobby", round: 0, used: [], answers: {}, fakes: {}, gained: {}, question: null });
     for (const entry of room.players) entry.score = 0;
     return true;
   }
@@ -419,7 +523,7 @@ async function handleApi(request, pathname, db) {
     return json(await createRoom(db, await readInput(request)), 201);
   }
 
-  const match = pathname.match(/^\/api\/rooms\/([23456789A-HJ-NP-Z]{6})(?:\/(invite|join|start|category|answer|chat|rematch))?$/);
+  const match = pathname.match(/^\/api\/rooms\/([23456789A-HJ-NP-Z]{6})(?:\/(invite|join|start|category|fake|answer|chat|rematch))?$/);
   if (!match) throw new GameError(404, "الطلب غير موجود.");
   const [, code, action] = match;
   const token = request.headers.get("Authorization")?.match(/^Bearer ([0-9a-f-]{36})$/i)?.[1];

@@ -1,5 +1,5 @@
 import qrcode from "/qrcode.js?v=3";
-import { playSound, soundEnabled, toggleSound, unlockSound } from "/sound.js?v=3";
+import { playSound, soundEnabled, toggleSound, unlockSound } from "/sound.js?v=5";
 
 const categories = {
   general: { title: "معلومات عامة", icon: "✦" },
@@ -7,7 +7,12 @@ const categories = {
   sports: { title: "رياضة", icon: "⚽" },
   places: { title: "جغرافيا", icon: "◉" },
   history: { title: "تاريخ", icon: "⌛" },
-  culture: { title: "ثقافة وفنون", icon: "♫" }
+  culture: { title: "ثقافة وفنون", icon: "♫" },
+  tales: { title: "غرائب وحكايات", icon: "❖" }
+};
+const formats = {
+  classic: { title: "كلاسيكي", description: "سؤال وأربعة خيارات، والإجابة الصحيحة بنقطة." },
+  bluff: { title: "الخدعة", description: "كل لاعب يكتب جوابًا مزيّفًا يقنع فيه الباقين، ثم الكل يدوّر على الصحيح بين الخدع." }
 };
 const modes = {
   screen: { title: "شاشة المجلس", choice: "أنشئ عرض المجلس", description: "الأسئلة على الشاشة الكبيرة، وأنت تجاوب منها وربعك من جوالاتهم." },
@@ -16,8 +21,10 @@ const modes = {
 };
 const phases = {
   lobby: "غرفة التحدّي", select: "اختيار الفئة", question: "وقت السؤال",
-  reveal: "نتيجة الجولة", finale: "لحظة الحسم", finished: "النتيجة النهائية"
+  reveal: "نتيجة الجولة", finale: "لحظة الحسم", finished: "النتيجة النهائية",
+  write: "اكتب خدعتك", vote: "وين الصح؟"
 };
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const app = document.querySelector("#app");
 const dialog = document.querySelector("#dialog");
 const dialogContent = document.querySelector("#dialog-content");
@@ -29,7 +36,7 @@ const roomCode = window.location.pathname.split("/")[2]?.toUpperCase();
 const storageKey = `tahaddi-alrabaa:${roomCode}`;
 const historyKey = "tatakuf-question-history";
 const nameKey = "tatakuf-player-name";
-const letters = ["أ", "ب", "ج", "د"];
+const letters = ["أ", "ب", "ج", "د", "هـ", "و", "ز", "ح", "ط"];
 let room;
 let token = roomCode ? sessionStorage.getItem(storageKey) : null;
 let clockOffset = 0;
@@ -42,6 +49,8 @@ let chatKey;
 let seenQuestions = readHistory();
 let seatAttempted = false;
 let seatError = "";
+let previousRanks = new Map();
+let previousScores = new Map();
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({
@@ -147,6 +156,9 @@ function openCreate(mode) {
         }).join("")}</select></label>
         <label class="field">مستوى البوتات<select name="difficulty"><option value="easy">سهل</option><option value="normal" selected>متوسط</option><option value="hard">صعب</option></select></label>
       </div>` : ""}
+      <fieldset class="format-picker"><legend>طريقة الأسئلة</legend>${Object.entries(formats).map(([id, item]) => `
+        <label class="format-option"><input type="radio" name="format" value="${id}" ${id === "classic" ? "checked" : ""}>
+          <strong>${item.title}</strong><span>${item.description}</span></label>`).join("")}</fieldset>
       <div class="form-row">
         <label class="field">عدد الجولات<select name="rounds"><option value="5">٥ جولات</option><option value="10">١٠ جولات</option><option value="20">٢٠ جولة</option></select></label>
         <label class="field">وقت الإجابة<select name="seconds"><option value="15">١٥ ثانية</option><option value="20" selected>٢٠ ثانية</option><option value="30">٣٠ ثانية</option></select></label>
@@ -265,7 +277,7 @@ function lobby() {
     ${room.display ? `<figure class="qr-block"><canvas data-room-qr aria-label="رمز QR للانضمام"></canvas><figcaption>${e(room.code)}</figcaption></figure>` : ""}
   </section>
   <section class="panel"><h2>اللاعبون <span class="muted">(${format(count)}/٨)</span></h2>
-    <div class="settings-line"><span>${format(settings.rounds)} جولات</span><span>${format(settings.seconds)} ثانية للسؤال</span>
+    <div class="settings-line"><span>${formats[settings.format ?? "classic"].title}</span><span>${format(settings.rounds)} جولات</span><span>${format(settings.seconds)} ثانية للسؤال</span>
       ${room.mode === "bots" ? `<span>${{ easy:"سهل", normal:"متوسط", hard:"صعب" }[settings.difficulty]}</span>` : ""}</div>
     ${count ? playersList(room.players, false, false, room.display) : `<p class="muted">بانتظار أول لاعب.</p>`}
     ${!host ? `<p class="muted">تبدأ المباراة لما يكون الكل جاهز.</p>` : ""}
@@ -292,27 +304,58 @@ function scores() {
   return `<section class="panel"><h2>النقاط</h2>${playersList([...room.players].sort((a, b) => b.score - a.score), true, false, room.display)}</section>`;
 }
 
-function questionView() {
-  const item = room.question;
-  const answered = room.yourAnswer !== null;
-  const progress = `${format(room.answeredCount)} من ${format(room.players.length)} جاوبوا`;
+function questionCard(item, hint = "شوف السؤال على الشاشة") {
+  const words = item.prompt ? item.prompt.split(/\s+/u).map((word, index) =>
+    `<span class="word" style="--i:${index}">${e(word)}</span>`).join(" ") : e(hint);
   return `<section class="panel question-card">
     ${timer()}
     <p class="eyebrow">${categories[item.category].title}</p>
-    <h2 dir="auto">${item.prompt ? e(item.prompt) : "شوف السؤال على الشاشة"}</h2>
-    ${item.image ? `<img class="question-image" src="/questions/${e(item.image.file)}" alt="${e(item.image.alt)}" width="750" height="500">` : ""}
-  </section>
-  <div class="options" aria-label="خيارات الإجابة">${item.options.map((option, index) => {
+    <h2 dir="auto">${words}</h2>
+    ${item.image ? `<button type="button" class="image-zoom" data-action="zoom" aria-label="كبّر الصورة: ${e(item.image.alt)}">
+      <img class="question-image" src="/questions/${e(item.image.file)}" alt="${e(item.image.alt)}" width="750" height="500">
+      ${room.display ? "" : '<span class="zoom-hint">اضغط لتكبير الصورة</span>'}</button>` : ""}
+  </section>`;
+}
+
+function writeView() {
+  const item = room.question;
+  const written = room.yourFake !== null;
+  const progress = `${format(room.answeredCount)} من ${format(room.players.length)} كتبوا خدعتهم`;
+  return `${questionCard(item)}
+  <section class="panel bluff-write">
+    ${room.spectator ? `<h2>اللاعبون يكتبون خدعهم من جوالاتهم</h2>`
+      : written ? `<h2>سجّلنا خدعتك</h2><p class="muted">${room.display ? "مخفية عن الحاضرين" : `<bdi>${e(room.yourFake)}</bdi>`}. انتظر الباقين.</p>`
+      : `<h2>اكتب جوابًا غلط يصدّقه الباقون</h2>
+        <form class="fake-form" data-form="fake">
+          <input name="fake" maxlength="40" required autocomplete="off" dir="auto" aria-label="خدعتك"
+            placeholder="خدعة مقنعة…" ${room.display ? 'class="masked"' : ""}>
+          <button class="btn primary" type="submit">أرسل الخدعة</button>
+        </form>
+        <p class="muted">${room.display ? "الكتابة مخفية عشان ما يشوفها أحد في المجلس." : "كل لاعب ينخدع بجوابك يعطيك نقطة."}</p>`}
+    <p class="muted progress">${progress}</p>
+  </section>${scores()}`;
+}
+
+function questionView() {
+  const item = room.question;
+  if (room.phase === "write") return writeView();
+  const answered = room.yourAnswer !== null;
+  const progress = `${format(room.answeredCount)} من ${format(room.players.length)} جاوبوا`;
+  const own = new Set(room.display ? [] : item.ownOptions ?? []);
+  const bluff = room.phase === "vote";
+  return `${questionCard(item)}
+  <div class="options${item.options.length > 4 ? " many" : ""}" aria-label="خيارات الإجابة">${item.options.map((option, index) => {
     // The shared screen never highlights the host's pick so the room cannot see it.
     const selected = !room.display && index === room.yourAnswer;
     const style = selected ? "selected" : "";
-    const content = `<span class="option-mark" aria-hidden="true">${letters[index]}</span><bdi>${e(option)}</bdi>`;
-    if (room.spectator) return `<div class="option">${content}</div>`;
-    return `<button type="button" class="option ${style}" data-action="answer" data-option="${index}"
-      ${answered || pending ? "disabled" : ""}>${content}</button>`;
+    const content = `<span class="option-mark" aria-hidden="true">${letters[index] ?? format(index + 1)}</span><bdi>${e(option)}</bdi>${
+      own.has(index) ? '<small class="own-tag">خدعتك</small>' : ""}`;
+    if (room.spectator) return `<div class="option" style="--i:${index}">${content}</div>`;
+    return `<button type="button" class="option ${style}${own.has(index) ? " own" : ""}" data-action="answer" data-option="${index}" style="--i:${index}"
+      ${answered || pending || own.has(index) ? "disabled" : ""}>${content}</button>`;
   }).join("")}</div>
   <section class="panel feedback">
-    <h2>${room.spectator ? "الإجابات من الجوالات" : answered ? "تم تسجيل إجابتك" : "اختر إجابة واحدة"}</h2>
+    <h2>${room.spectator ? "الإجابات من الجوالات" : answered ? "تم تسجيل إجابتك" : bluff ? "وين الإجابة الصحيحة بين الخدع؟" : "اختر إجابة واحدة"}</h2>
     <p class="muted">${progress}</p>
   </section>${scores()}`;
 }
@@ -322,13 +365,29 @@ function leaderboard(order, title) {
   return `<section class="panel leaderboard"><h2>${title}</h2>
     <ol class="rank-list">${order.map((player, index) => {
       if (index && player.score !== order[index - 1].score) rank = index + 1;
-      return `<li class="rank-row rank-${rank}" style="--stagger:${index * 65}ms">
+      return `<li class="rank-row rank-${rank}" style="--stagger:${index * 65}ms" data-player="${e(player.id)}">
         <span class="rank-medal" aria-label="المركز ${format(rank)}">${format(rank)}</span>
         <span class="rank-name"><bdi>${e(player.name)}</bdi>${player.id === room.playerId ? '<small>أنت</small>' : ""}</span>
-        ${player.gained ? '<strong class="round-gain">+١</strong>' : ""}
-        <span class="rank-score">${format(player.score)} <small>نقطة</small></span>
+        ${player.gained ? `<strong class="round-gain">+${format(player.gained)}</strong>` : ""}
+        <span class="rank-score"><span data-count="${player.score}">${format(player.score)}</span> <small>نقطة</small></span>
       </li>`;
     }).join("")}</ol></section>`;
+}
+
+function bluffReveal(item) {
+  // Fakes flip first, one by one, and the right answer lands last.
+  const order = item.options.map((_, index) => index).filter((index) => index !== item.correctIndex);
+  order.push(item.correctIndex);
+  return `<section class="panel bluff-reveal"><h2>مين خدع مين؟</h2><ol class="reveal-list">${order.map((index, step) => {
+    const correct = index === item.correctIndex;
+    const authors = item.authors[index];
+    const voters = item.voters[index];
+    const label = correct ? "الإجابة الصحيحة" : authors.length ? `خدعة <bdi>${authors.map(e).join(" و")}</bdi>` : "خدعة اللعبة";
+    return `<li class="reveal-card${correct ? " is-correct" : ""}" style="--step:${step}">
+      <span class="reveal-inner"><span class="reveal-label">${label}</span><strong><bdi>${e(item.options[index])}</bdi></strong>
+      <span class="reveal-voters">${voters.length ? `${correct ? "عرفها" : "انخدع فيها"}: ${voters.map((name) => `<bdi>${e(name)}</bdi>`).join("، ")}` : correct ? "ما أحد عرفها" : "ما انخدع فيها أحد"}</span></span>
+    </li>`;
+  }).join("")}</ol></section>`;
 }
 
 function roundResults() {
@@ -337,10 +396,14 @@ function roundResults() {
   const correct = room.yourAnswer === item.correctIndex;
   const outcome = room.display ? "الإجابة الصحيحة" : room.yourAnswer === null ? "انتهى وقت الإجابة" : correct ? "إجابة صحيحة" : "إجابة غير صحيحة";
   const order = [...room.players].sort((a, b) => b.score - a.score);
+  // In bluff rounds the cards below reveal the answer, so the banner only shows this player's points.
+  const mine = room.players.find((player) => player.id === room.playerId)?.gained ?? 0;
+  const headline = !item.authors ? `<bdi>${e(item.options[item.correctIndex])}</bdi>`
+    : room.display ? "الحقيقة تنكشف…" : mine ? `كسبت +${format(mine)}` : "ما كسبت نقاط هالجولة";
   return `<section class="panel round-answer">
-    <div><p class="eyebrow">${outcome}</p><h2><bdi>${e(item.options[item.correctIndex])}</bdi></h2></div>
+    <div><p class="eyebrow">${item.authors && !room.display ? "نتيجتك" : outcome}</p><h2>${headline}</h2></div>
     <div><p class="muted">الجولة التالية تلقائيًا</p>${timer()}</div>
-  </section>${leaderboard(order, "ترتيب اللاعبين")}`;
+  </section>${item.authors ? bluffReveal(item) : ""}${leaderboard(order, "ترتيب اللاعبين")}`;
 }
 
 function finale() {
@@ -409,7 +472,8 @@ function playPhaseSound(previous) {
   if (room.phase === "reveal") {
     const key = room.display || room.yourAnswer === room.question.correctIndex ? "correct" : "incorrect";
     playSound(key);
-  } else playSound({ lobby:"join", select:"select", question:"question", finale:"finale", finished:"finished" }[room.phase]);
+  } else playSound({ lobby:"join", select:"select", question:"question", write:"question", vote:"select",
+    finale:"finale", finished:"finished" }[room.phase]);
 }
 
 function renderRoom(next, force = false) {
@@ -430,8 +494,18 @@ function renderRoom(next, force = false) {
     stageKey = key;
     const active = document.activeElement;
     const focus = body.contains(active) && active.dataset.action;
-    const view = { lobby, select:selection, question:questionView, reveal:roundResults, finale, finished }[room.phase]();
+    const view = { lobby, select:selection, question:questionView, write:questionView, vote:questionView,
+      reveal:roundResults, finale, finished }[room.phase]();
+    // Keep half-typed names and fakes when the stage refreshes because someone else acted.
+    const typing = [...body.querySelectorAll("input[name]")].map((input) => [input.name, input.value, input === active]);
+    body.classList.toggle("settled", !phaseChanged);
     body.innerHTML = view;
+    for (const [name, value, focused] of typing) {
+      const input = body.querySelector(`input[name="${name}"]`);
+      if (!input || phaseChanged) continue;
+      input.value = value;
+      if (focused) input.focus({ preventScroll: true });
+    }
     const gameTitle = app.querySelector("#game-title");
     gameTitle.textContent = phases[room.phase];
     app.querySelector("#round-label").textContent = room.round ? `الجولة ${format(room.round)} من ${format(room.settings.rounds)}` : "";
@@ -443,6 +517,9 @@ function renderRoom(next, force = false) {
       const activeTag = active?.tagName;
       if (!(activeTag === "INPUT" || activeTag === "TEXTAREA") && !dialog.open) gameTitle.focus({ preventScroll: true });
       playPhaseSound(previous);
+      if (previous) stinger();
+      animateLeaderboard();
+      if (room.phase === "finished") confetti();
     } else if (focus) {
       [...body.querySelectorAll("button[data-action]")].find((button) => !button.disabled &&
         button.dataset.action === focus && button.dataset.category === active.dataset.category &&
@@ -480,16 +557,114 @@ function updateTimer() {
   const remaining = Math.max(0, room.deadline - (Date.now() + clockOffset));
   const seconds = Math.ceil(remaining / 1000);
   const chooser = room.players.find((player) => player.id === room.chooserId);
-  const duration = room.phase === "finale" ? 5500 : room.phase === "reveal" ? 5000
-    : room.phase === "select" ? (chooser?.bot ? 2200 : 15000) : room.settings.seconds * 1000;
+  const duration = room.phase === "finale" ? 5500 : room.phase === "reveal" ? (room.settings.format === "bluff" ? 9000 : 5000)
+    : room.phase === "select" ? (chooser?.bot ? 2200 : 15000)
+    : room.phase === "write" ? room.settings.seconds * 1000 + 15000 : room.settings.seconds * 1000;
   const text = `${format(seconds)} ثانية`;
   if (label.textContent !== text) label.textContent = text;
   fill.style.width = `${Math.min(100, remaining / duration * 100)}%`;
-  fill.classList.toggle("late", room.phase === "question" && seconds <= 3);
-  if (room.phase === "question" && seconds >= 1 && seconds <= 3 && lastTick !== seconds && room.yourAnswer === null) {
+  const answering = ["question", "write", "vote"].includes(room.phase);
+  fill.classList.toggle("late", answering && seconds <= 3);
+  if (answering && seconds >= 1 && seconds <= 3 && lastTick !== seconds && room.yourAnswer === null && !room.yourFake) {
     lastTick = seconds;
     playSound("tick");
   }
+}
+
+// A gold band sweeps across with the new phase name; purely decorative and never blocks taps.
+function stinger() {
+  if (reducedMotion.matches || !["select", "question", "write", "vote", "reveal", "finale"].includes(room.phase)) return;
+  document.querySelector(".stinger")?.remove();
+  const band = document.createElement("div");
+  band.className = "stinger";
+  band.setAttribute("aria-hidden", "true");
+  band.innerHTML = `<span>${room.round ? `الجولة ${format(room.round)}` : ""}</span><strong>${phases[room.phase]}</strong>`;
+  document.body.append(band);
+  band.addEventListener("animationend", () => band.remove(), { once: true });
+  playSound("stinger");
+}
+
+// Rows slide from their previous rank and scores count up to the new total.
+function animateLeaderboard() {
+  const rows = [...app.querySelectorAll(".rank-row[data-player]")];
+  const nextRanks = new Map(rows.map((row, index) => [row.dataset.player, index]));
+  if (!reducedMotion.matches) {
+    const height = rows[0]?.offsetHeight ?? 0;
+    for (const row of rows) {
+      const before = previousRanks.get(row.dataset.player);
+      const shift = before === undefined ? 0 : (before - nextRanks.get(row.dataset.player)) * (height + 7);
+      if (shift) row.animate([{ transform: `translateY(${shift}px)` }, { transform: "none" }],
+        { duration: 750, delay: 650, easing: "cubic-bezier(.2,.8,.2,1)", fill: "backwards" });
+      const counter = row.querySelector("[data-count]");
+      const from = previousScores.get(row.dataset.player) ?? 0;
+      const to = Number(counter.dataset.count);
+      if (to > from) {
+        const started = performance.now() + 500;
+        const step = (time) => {
+          const progress = Math.min(1, Math.max(0, (time - started) / 700));
+          counter.textContent = format(Math.round(from + (to - from) * progress));
+          if (progress < 1 && counter.isConnected) requestAnimationFrame(step);
+        };
+        counter.textContent = format(from);
+        requestAnimationFrame(step);
+      }
+    }
+  }
+  if (rows.length) {
+    previousRanks = nextRanks;
+    previousScores = new Map(room.players.map((player) => [player.id, player.score]));
+  }
+}
+
+function confetti() {
+  if (reducedMotion.matches) return;
+  const canvas = document.createElement("canvas");
+  canvas.className = "confetti";
+  canvas.setAttribute("aria-hidden", "true");
+  document.body.append(canvas);
+  const ratio = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width = innerWidth * ratio;
+  canvas.height = innerHeight * ratio;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(ratio, ratio);
+  const colors = ["#f8d581", "#f6bd58", "#91e7bc", "#fff3cf", "#e9a86b"];
+  const pieces = Array.from({ length: 140 }, () => ({
+    x: innerWidth / 2 + (Math.random() - .5) * 120, y: innerHeight * .32,
+    vx: (Math.random() - .5) * 15, vy: -Math.random() * 15 - 5, spin: Math.random() * 6,
+    size: 5 + Math.random() * 7, color: colors[Math.floor(Math.random() * colors.length)]
+  }));
+  const start = performance.now();
+  const frame = (time) => {
+    const elapsed = time - start;
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    for (const piece of pieces) {
+      piece.vy += .38; piece.vx *= .985; piece.x += piece.vx; piece.y += piece.vy;
+      ctx.save();
+      ctx.translate(piece.x, piece.y);
+      ctx.rotate(piece.spin * elapsed / 400);
+      ctx.globalAlpha = Math.max(0, 1 - elapsed / 3400);
+      ctx.fillStyle = piece.color;
+      ctx.fillRect(-piece.size / 2, -piece.size / 4, piece.size, piece.size / 2);
+      ctx.restore();
+    }
+    if (elapsed < 3400) requestAnimationFrame(frame); else canvas.remove();
+  };
+  requestAnimationFrame(frame);
+}
+
+function openZoom() {
+  const image = room?.question?.image;
+  if (!image) return;
+  openDialog("الصورة", "قرّب بإصبعين أو بالأزرار.", `<div class="zoom-frame" style="--zoom:1">
+      <img src="/questions/${e(image.file)}" alt="${e(image.alt)}"></div>
+    <div class="actions zoom-actions">${actionButton("تكبير +", "zoom-in", "outline")}${actionButton("تصغير −", "zoom-out", "outline")}</div>`);
+}
+
+function setZoom(change) {
+  const frame = dialog.querySelector(".zoom-frame");
+  if (!frame) return;
+  const zoom = Math.min(4, Math.max(1, Number(frame.style.getPropertyValue("--zoom")) + change));
+  frame.style.setProperty("--zoom", String(zoom));
 }
 
 async function api(path, body) {
@@ -591,7 +766,14 @@ async function fullscreen() {
 document.addEventListener("pointerdown", unlockSound, { passive: true });
 document.addEventListener("keydown", unlockSound);
 document.addEventListener("change", (event) => {
-  if (event.target.name === "category" && event.target.form?.dataset.form === "create") updateBankCount(event.target.form);
+  const form = event.target.form;
+  if (form?.dataset.form !== "create") return;
+  if (event.target.name === "format") {
+    // Story questions make the best bluffs; classic games start with every category.
+    const bluff = event.target.value === "bluff";
+    for (const box of form.querySelectorAll('input[name="category"]')) box.checked = bluff ? box.value === "tales" : true;
+  }
+  if (event.target.name === "category" || event.target.name === "format") updateBankCount(form);
 });
 document.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-action]");
@@ -606,6 +788,9 @@ document.addEventListener("click", (event) => {
   else if (action === "copy") void copyInvitation();
   else if (action === "fullscreen") void fullscreen();
   else if (action === "retry") void sync();
+  else if (action === "zoom") openZoom();
+  else if (action === "zoom-in") setZoom(.5);
+  else if (action === "zoom-out") setZoom(-.5);
   else void gameAction(action, button);
 });
 
@@ -632,6 +817,26 @@ document.addEventListener("submit", async (event) => {
   if (!kind) return;
   event.preventDefault();
   if (kind === "chat") { await sendChat(form); return; }
+  if (kind === "fake") {
+    const button = form.querySelector("button");
+    const input = form.elements.fake;
+    if (button.disabled || pending || !room?.question) return;
+    pending = button.disabled = true;
+    const errorLine = app.querySelector("#room-message");
+    errorLine.textContent = "";
+    try {
+      const data = await api(`/api/rooms/${roomCode}/fake`, { questionId: room.question.id, text: input.value });
+      pending = false;
+      renderRoom(data.room, true);
+      playSound("locked");
+    } catch (error) {
+      pending = button.disabled = false;
+      errorLine.dataset.source = "action";
+      errorLine.textContent = error.status ? error.message : "تعذّر الإرسال. جرّب مرة ثانية.";
+      if (error.status === 409 && !/الإجابة الصحيحة/.test(error.message)) void sync();
+    }
+    return;
+  }
   if (kind === "seat") {
     const button = form.querySelector('button[type="submit"]');
     if (button.disabled) return;
@@ -659,7 +864,7 @@ document.addEventListener("submit", async (event) => {
       const mode = form.dataset.mode;
       if (data.get("name") !== null) rememberName(data.get("name"));
       const created = await api("/api/rooms", {
-        mode, name: data.get("name"), rounds: Number(data.get("rounds")), seconds: Number(data.get("seconds")), categories: picked,
+        mode, name: data.get("name"), format: data.get("format") ?? "classic", rounds: Number(data.get("rounds")), seconds: Number(data.get("seconds")), categories: picked,
         history: questionHistory(),
         ...(mode === "bots" ? { bots: Number(data.get("bots")), difficulty: data.get("difficulty") } : {})
       });

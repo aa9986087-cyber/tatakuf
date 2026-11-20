@@ -34,7 +34,8 @@ export async function buildPreview() {
   appCode = replaceAll(appCode, "window.location.assign(", "previewGo(");
   appCode = replaceOnce(appCode, "new URL(`/room/${room.code}`, window.location.origin).href", "previewRoomLink(room.code)");
   appCode = replaceOnce(appCode, '"/hero.webp?v=3"', '"${previewHero}"');
-  appCode = replaceOnce(appCode, "/questions/${e(item.image.file)}", "${previewImages[item.image.file] ?? \"\"}");
+  appCode = replaceAll(appCode, "/questions/${e(item.image.file)}", "${previewImages[item.image.file] ?? \"\"}");
+  appCode = replaceOnce(appCode, "/questions/${e(image.file)}", "${previewImages[image.file] ?? \"\"}");
 
   const qrCode = qr.replace("export const qrcode =", "const qrcode =")
     .replace(/^export default qrcode;$/m, "")
@@ -49,14 +50,15 @@ export async function buildPreview() {
 .preview-bar { position: fixed; inset: auto 0 0; z-index: 50; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center;
   padding: 8px max(16px, env(safe-area-inset-left, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)); background: #0b1d15ee; border-top: 1px solid #3c6350;
   color: #e7d5a6; font-size: 14px; backdrop-filter: blur(6px); }
-.preview-bar .btn { min-height: 38px; padding-block: 4px; font-size: 14px; }
-body { padding-bottom: 64px; }
+.preview-bar { flex-wrap: nowrap; gap: 6px; font-size: 12px; }
+.preview-bar .btn { min-height: 34px; padding: 3px 10px; font-size: 13px; white-space: nowrap; }
+body { padding-bottom: 60px; }
 </style>
 ${body}
 <div class="preview-bar" role="region" aria-label="أدوات النسخة التجريبية">
-  <span>نسخة تجريبية للتعديل</span>
+  <span>تجريبية</span>
   <button type="button" class="btn outline" id="preview-add-player" hidden>أضف لاعب تجريبي</button>
-  <button type="button" class="btn outline" id="preview-reset">مسح الغرف التجريبية</button>
+  <button type="button" class="btn outline" id="preview-reset">ابدأ من جديد</button>
 </div>
 <script type="module">
 const bankCounts = ${JSON.stringify(counts)};
@@ -158,8 +160,13 @@ setInterval(async () => {
     if (!room) continue;
     if (room.phase === "select" && room.chooserId === room.playerId && Math.random() < 0.4) {
       await asPlayer(token, "/category", { round: room.round, category: room.available[Math.floor(Math.random() * room.available.length)] });
-    } else if (room.phase === "question" && room.yourAnswer === null && Math.random() < 0.25) {
-      await asPlayer(token, "/answer", { questionId: room.question.id, option: Math.floor(Math.random() * 4) });
+    } else if (room.phase === "write" && room.yourFake === null && Math.random() < 0.2) {
+      const fakes = ["قطعة بسكويت", "عام ١٧٧٧", "البطريق", "سبعة", "جزر القمر", "الرصاص", "الحمام الزاجل"];
+      await asPlayer(token, "/fake", { questionId: room.question.id, text: fakes[Math.floor(Math.random() * fakes.length)] });
+    } else if ((room.phase === "question" || room.phase === "vote") && room.yourAnswer === null && Math.random() < 0.25) {
+      const own = room.question.ownOptions ?? [];
+      const allowed = room.question.options.map((_, index) => index).filter((index) => !own.includes(index));
+      await asPlayer(token, "/answer", { questionId: room.question.id, option: allowed[Math.floor(Math.random() * allowed.length)] });
     }
   }
 }, 1000);

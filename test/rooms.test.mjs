@@ -105,8 +105,9 @@ test("the bank contains thousands of unique questions and displays illustrated q
   await display("/start", {});
   await display("/category", { round: 1, category: "culture" });
   const phone = await request(path, undefined, first.data.token);
-  assert.equal(phone.data.room.question.image, undefined);
   const screenImage = (await display()).data.room.question.image;
+  assert.deepEqual(phone.data.room.question.image, screenImage);
+  assert.equal(phone.data.room.question.prompt, (await display()).data.room.question.prompt);
   assert.ok(screenImage.alt);
   const asset = await worker.fetch(new Request(`https://quiz.example/questions/${screenImage.file}`), {});
   assert.equal(asset.status, 200);
@@ -185,7 +186,7 @@ test("shared screen host plays from the display and one phone is enough to start
   assert.ok(screen.question.prompt);
   assert.equal(screen.question.correctIndex, undefined);
   const phoneQuestion = (await phone()).data.room.question;
-  assert.equal(phoneQuestion.prompt, null);
+  assert.equal(phoneQuestion.prompt, screen.question.image ? screen.question.prompt : null);
   assert.deepEqual(phoneQuestion.options, screen.question.options);
   const answer = { questionId: screen.question.id, option: 2 };
   const locked = (await display("/answer", answer)).data.room;
@@ -288,4 +289,83 @@ test("category selection and answers expire on server time without awarding miss
   assert.equal(revealed.answeredCount, 0);
   assert.deepEqual(revealed.players.map(({ score }) => score), [0, 0]);
   assert.equal((await host()).data.room.revision, revealed.revision);
+});
+
+test("bluff rounds collect fakes, score fooled players and hide nothing until the reveal", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 100_000 });
+  const { request } = await setup(t);
+  const created = await request("", { name: "ناصر", rounds: 5, seconds: 20, categories: ["science"], format: "bluff" });
+  assert.equal(created.status, 201);
+  assert.equal(created.data.room.settings.format, "bluff");
+  assert.equal((await request("", { name: "ناصر", rounds: 5, seconds: 20, categories: ["science"], format: "x" })).status, 400);
+  const path = `/${created.data.room.code}`;
+  const host = (action = "", body) => request(path + action, body, created.data.token);
+  const joinAs = async (name) => {
+    const joined = await request(path + "/join", { name });
+    return (action = "", body) => request(path + action, body, joined.data.token);
+  };
+  const guest = await joinAs("محمد");
+  const third = await joinAs("سعد");
+  await host("/start", {});
+  const writing = (await host("/category", { round: 1, category: "science" })).data.room;
+  assert.equal(writing.phase, "write");
+  assert.equal(writing.question.options, undefined);
+  assert.equal(writing.deadline, 100_000 + 35_000);
+  const questionId = writing.question.id;
+  const correct = bank.science.find((entry) => entry[0] === writing.question.prompt)[1];
+  assert.equal((await host("/answer", { questionId, option: 0 })).status, 409);
+  assert.equal((await host("/fake", { questionId, text: ` ${correct} ` })).status, 409);
+  assert.equal((await host("/fake", { questionId, text: "" })).status, 400);
+  const fake = (await host("/fake", { questionId, text: "خدعة ناصر" })).data.room;
+  assert.equal(fake.yourFake, "خدعة ناصر");
+  assert.equal(fake.answeredCount, 1);
+  assert.equal((await guest()).data.room.yourFake, null);
+  await guest("/fake", { questionId, text: "خدعة  ناصر!" });
+  const voting = (await third("/fake", { questionId, text: "خدعة سعد" })).data.room;
+  assert.equal(voting.phase, "vote");
+  const options = voting.question.options;
+  assert.equal(options.length, 4);
+  assert.ok(options.includes(correct));
+  assert.equal(options.filter((text) => text.startsWith("خدعة ناصر")).length, 1);
+  assert.equal(voting.question.correctIndex, undefined);
+  assert.equal(voting.question.authors, undefined);
+  const shared = options.findIndex((text) => text.startsWith("خدعة ناصر"));
+  const saad = options.indexOf("خدعة سعد");
+  const right = options.indexOf(correct);
+  assert.deepEqual((await host()).data.room.question.ownOptions, [shared]);
+  assert.equal((await host("/answer", { questionId, option: shared })).status, 403);
+  assert.equal((await host("/answer", { questionId, option: 9 })).status, 400);
+  await host("/answer", { questionId, option: saad });
+  await guest("/answer", { questionId, option: right });
+  const revealed = (await third("/answer", { questionId, option: shared })).data.room;
+  assert.equal(revealed.phase, "reveal");
+  assert.equal(revealed.question.correctIndex, right);
+  assert.deepEqual(revealed.question.authors[shared], ["ناصر", "محمد"]);
+  assert.deepEqual(revealed.question.voters[saad], ["ناصر"]);
+  const points = Object.fromEntries(revealed.players.map(({ name, score, gained }) => [name, [score, gained]]));
+  assert.deepEqual(points, { "ناصر": [1, 1], "محمد": [3, 3], "سعد": [1, 1] });
+});
+
+test("bluff bots write fakes and vote on the server clock, and silent rounds still advance", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 100_000 });
+  const { request } = await setup(t);
+  const created = await request("", {
+    mode: "bots", name: "سالم", rounds: 5, seconds: 15, categories: ["general"], difficulty: "hard", bots: 2, format: "bluff"
+  });
+  const path = `/${created.data.room.code}`;
+  const solo = (action = "", body) => request(path + action, body, created.data.token);
+  await solo("/start", {});
+  const writing = (await solo("/category", { round: 1, category: "general" })).data.room;
+  t.mock.timers.tick(12_500);
+  assert.equal((await solo()).data.room.answeredCount, 2);
+  await solo("/fake", { questionId: writing.question.id, text: "جواب مخترع" });
+  const voting = (await solo()).data.room;
+  assert.equal(voting.phase, "vote");
+  assert.ok(voting.question.options.length >= 4);
+  t.mock.timers.tick(15_000);
+  const revealed = (await solo()).data.room;
+  assert.equal(revealed.phase, "reveal");
+  assert.equal(revealed.question.voters.flat().length, 2);
+  t.mock.timers.setTime(revealed.deadline + 2_200 + 30_000 + 15_000);
+  assert.equal((await solo()).data.room.phase, "reveal");
 });
