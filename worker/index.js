@@ -156,7 +156,8 @@ function requireEnoughQuestions(room) {
   }
 }
 
-function startQuestion(room, category, now) {
+// pickedBy is the player who chose the category, or null when the clock picked one at random.
+function startQuestion(room, category, now, pickedBy = null) {
   const seen = new Set(room.seen);
   const bank = bankOf(room)[category];
   const eligible = bank.flatMap((_, index) => seen.has(keyOf(room, category) + "-" + index) ? [] : [index]);
@@ -169,7 +170,7 @@ function startQuestion(room, category, now) {
   room.used.push(id);
   room.seen.push(id);
   if (isBluff(room)) {
-    room.question = { id, category, prompt, image, correct, decoys: shuffled([second, third, fourth]) };
+    room.question = { id, category, pickedBy, prompt, image, correct, decoys: shuffled([second, third, fourth]) };
     room.phase = "write";
     room.deadline = now + room.settings.seconds * 1000 + writeExtraTime;
     room.answers = {};
@@ -181,7 +182,7 @@ function startQuestion(room, category, now) {
   }
   const options = shuffled([correct, second, third, fourth]);
   room.question = {
-    id, category, prompt, options, correctIndex: options.indexOf(correct), image
+    id, category, pickedBy, prompt, options, correctIndex: options.indexOf(correct), image
   };
   room.phase = "question";
   room.deadline = now + room.settings.seconds * 1000;
@@ -263,7 +264,10 @@ function advanceByClock(room, now) {
     }
     const deadline = room.deadline;
     if (deadline === null || deadline > now) return changed;
-    if (room.phase === "select") startQuestion(room, randomItem(availableCategories(room)), deadline);
+    if (room.phase === "select") {
+      const chooser = chooserFor(room);
+      startQuestion(room, randomItem(availableCategories(room)), deadline, chooser.bot ? chooser.id : null);
+    }
     else if (room.phase === "question" || room.phase === "vote") reveal(room, deadline);
     else if (room.phase === "write") startVote(room, deadline);
     else if (room.phase === "reveal" && room.round < room.settings.rounds) startSelection(room, deadline);
@@ -288,6 +292,7 @@ function viewRoom(room, player, revision, now = Date.now()) {
   const question = room.question && (["question", "write", "vote"].includes(room.phase) || showAnswer) ? {
     id: room.question.id,
     category: room.question.category,
+    pickedBy: room.question.pickedBy ? nameOf(room.question.pickedBy) || null : null,
     prompt: showVisual ? room.question.prompt : null,
     ...(showVisual && room.question.image ? { image: room.question.image } : {}),
     ...(room.phase !== "write" ? { options: room.question.options } : {}),
@@ -377,7 +382,7 @@ function applyAction(room, player, action, input, now) {
     if (room.phase !== "select" || room.round !== input.round) throw new GameError(409, "تغيّرت الجولة.");
     if (chooserFor(room).id !== player.id) throw new GameError(403, "اختيار الفئة بيد اللاعب اللي عليه الدور.");
     if (!availableCategories(room).includes(input.category)) throw new GameError(400, "اختر فئة من القائمة.");
-    startQuestion(room, input.category, now);
+    startQuestion(room, input.category, now, player.id);
     return true;
   }
   if (action === "fake") {

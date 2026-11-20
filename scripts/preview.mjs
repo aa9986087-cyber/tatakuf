@@ -57,6 +57,7 @@ export async function buildPreview() {
 .preview-bar { flex-wrap: nowrap; gap: 6px; font-size: 12px; }
 .preview-bar .btn { min-height: 34px; padding: 3px 10px; font-size: 13px; white-space: nowrap; }
 body { padding-bottom: 60px; }
+:root { --dock-offset: 54px; }
 </style>
 ${body}
 <div class="preview-bar" role="region" aria-label="أدوات النسخة التجريبية">

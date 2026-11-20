@@ -383,3 +383,16 @@ test("every category has questions in both formats and flag pictures are served 
   assert.match(await response.text(), /<svg/);
   assert.equal((await worker.fetch(new Request("https://quiz.example/questions/flag-zz.svg"), {})).status, 404);
 });
+
+test("everyone sees who picked the category, or that the clock picked it", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 100_000 });
+  const { host, guest } = await setup(t, 15);
+  await host("/start", {});
+  await host("/category", { round: 1, category: "science" });
+  assert.equal((await guest()).data.room.question.pickedBy, "ناصر");
+  t.mock.timers.tick(15_000 + 5_000 + 15_000);
+  const timedOut = (await host()).data.room;
+  assert.equal(timedOut.round, 2);
+  assert.equal(timedOut.phase, "question");
+  assert.equal(timedOut.question.pickedBy, null);
+});

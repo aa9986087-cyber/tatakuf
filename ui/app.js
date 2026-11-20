@@ -309,8 +309,12 @@ function selection() {
   </section>${scores()}`;
 }
 
+// A slim, scrollable row of scores keeps the stage clear between questions.
 function scores() {
-  return `<section class="panel"><h2>النقاط</h2>${playersList([...room.players].sort((a, b) => b.score - a.score), true, false, room.display)}</section>`;
+  const order = [...room.players].sort((a, b) => b.score - a.score);
+  return `<section class="score-strip" aria-label="النقاط"><ol>${order.map((player, index) => `
+    <li class="${player.id === room.playerId ? "is-me" : ""}${index === 0 && player.score ? " is-lead" : ""}">
+      <span class="strip-name"><bdi>${e(player.name)}</bdi></span><strong>${format(player.score)}</strong></li>`).join("")}</ol></section>`;
 }
 
 function questionCard(item, hint = "شوف السؤال على الشاشة") {
@@ -318,12 +322,19 @@ function questionCard(item, hint = "شوف السؤال على الشاشة") {
     `<span class="word" style="--i:${index}">${e(word)}</span>`).join(" ") : e(hint);
   return `<section class="panel question-card">
     ${timer()}
-    <p class="eyebrow">${categories[item.category].title}</p>
+    <p class="eyebrow cat-${item.category}"><span class="pick-dot" aria-hidden="true"></span>${categories[item.category].title}
+      <span class="picked-by">· ${pickedLabel(item)}</span></p>
     <h2 dir="auto">${words}</h2>
     ${item.image ? `<button type="button" class="image-zoom" data-action="zoom" aria-label="كبّر الصورة: ${e(item.image.alt)}">
       <img class="question-image" src="/questions/${e(item.image.file)}" alt="${e(item.image.alt)}" width="750" height="500">
       ${room.display ? "" : '<span class="zoom-hint">اضغط لتكبير الصورة</span>'}</button>` : ""}
   </section>`;
+}
+
+function pickedLabel(item) {
+  if (!item.pickedBy) return "اختيار عشوائي";
+  const mine = room.players.find((player) => player.id === room.playerId)?.name === item.pickedBy;
+  return mine ? "أنت اخترتها" : `اختيار <bdi>${e(item.pickedBy)}</bdi>`;
 }
 
 function writeView() {
@@ -342,7 +353,7 @@ function writeView() {
         </form>
         <p class="muted">${room.display ? "الكتابة مخفية عشان ما يشوفها أحد في المجلس." : "كل لاعب ينخدع بجوابك يعطيك نقطة."}</p>`}
     <p class="muted progress">${progress}</p>
-  </section>${scores()}`;
+  </section>`;
 }
 
 function questionView() {
@@ -363,10 +374,8 @@ function questionView() {
     return `<button type="button" class="option ${style}${own.has(index) ? " own" : ""}" data-action="answer" data-option="${index}" style="--i:${index}"
       ${answered || pending || own.has(index) ? "disabled" : ""}>${content}</button>`;
   }).join("")}</div>
-  <section class="panel feedback">
-    <h2>${room.spectator ? "الإجابات من الجوالات" : answered ? "تم تسجيل إجابتك" : bluff ? "وين الإجابة الصحيحة بين الخدع؟" : "اختر إجابة واحدة"}</h2>
-    <p class="muted">${progress}</p>
-  </section>${scores()}`;
+  <p class="answer-status${answered ? " done" : ""}"><span>${room.spectator ? "الإجابات من الجوالات" : answered ? "تم تسجيل إجابتك ✓" : bluff ? "وين الإجابة الصحيحة بين الخدع؟" : "اختر إجابة واحدة"}</span>
+    <span class="muted">${progress}</span></p>`;
 }
 
 function leaderboard(order, title) {
@@ -448,18 +457,64 @@ function createRoomShell() {
     <div class="game-head"><div><p class="mode-chip">${modes[room.mode].title}</p><h1 tabindex="-1" id="game-title"></h1><p id="round-label" class="muted"></p></div>
       ${room.mode === "bots" ? "" : roomBadge(room.code)}</div>
     <p id="room-message" class="error" role="alert"></p>
-    <div class="game-layout${online ? " has-chat" : ""}">
+    <div class="game-layout">
       <div class="game-main"></div>
-      ${online ? `<aside class="panel chat" aria-labelledby="chat-title">
-        <div class="chat-head"><h2 id="chat-title">شات الغرفة</h2></div>
+    </div>
+    ${online ? `<button type="button" class="chat-fab" data-action="chat-toggle" aria-expanded="false" aria-controls="chat-drawer" aria-label="افتح شات الغرفة">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.2 3.6c-.6.5-1.3.1-1.3-.7V16A2.5 2.5 0 0 1 4 13.5z"/></svg>
+        <span class="chat-badge" hidden></span>
+      </button>
+      <aside class="chat-drawer" id="chat-drawer" aria-labelledby="chat-title" hidden>
+        <div class="chat-head"><h2 id="chat-title">شات الغرفة</h2>
+          <button type="button" class="subtle-button close" data-action="chat-toggle" aria-label="أغلق الشات">×</button></div>
         <div class="chat-log" role="log" aria-label="رسائل الغرفة"></div>
         <form class="chat-form" data-form="chat">
           <input name="message" aria-label="رسالة للشات" placeholder="اكتب رسالة…" maxlength="240" autocomplete="off" required dir="auto">
-          <button class="btn outline" type="submit">إرسال</button>
+          <button class="btn primary" type="submit">إرسال</button>
         </form><p class="error" data-chat-error role="alert"></p>
       </aside>` : ""}
-    </div>
   </section>`;
+}
+
+let chatOpen = false;
+let chatSeen;
+
+function toggleChat(open = !chatOpen) {
+  const drawer = app.querySelector(".chat-drawer");
+  const fab = app.querySelector(".chat-fab");
+  if (!drawer) return;
+  chatOpen = open;
+  drawer.hidden = !open;
+  fab.setAttribute("aria-expanded", String(open));
+  fab.classList.toggle("open", open);
+  if (open) {
+    chatSeen = room.chat?.at(-1)?.id;
+    updateChatBadge();
+    const log = drawer.querySelector(".chat-log");
+    log.scrollTop = log.scrollHeight;
+    drawer.querySelector("input").focus({ preventScroll: true });
+  } else fab.focus({ preventScroll: true });
+}
+
+// Count messages from others since the drawer was last open.
+function updateChatBadge() {
+  const badge = app.querySelector(".chat-badge");
+  if (!badge) return;
+  const messages = room.chat ?? [];
+  if (chatOpen) chatSeen = messages.at(-1)?.id;
+  const from = messages.findIndex((message) => message.id === chatSeen);
+  const unread = messages.slice(from + 1).filter((message) => message.playerId !== room.playerId).length;
+  const before = Number(badge.dataset.count ?? 0);
+  badge.hidden = !unread;
+  badge.dataset.count = unread;
+  badge.textContent = unread > 9 ? "+٩" : format(unread);
+  if (unread > before) {
+    const fab = app.querySelector(".chat-fab");
+    fab.classList.remove("ping");
+    void fab.offsetWidth;
+    fab.classList.add("ping");
+    playSound("tap");
+  }
 }
 
 function updateChat() {
@@ -474,6 +529,8 @@ function updateChat() {
     <strong><bdi>${e(message.name)}</bdi></strong><p dir="auto">${e(message.text)}</p></div>`).join("")
     : '<p class="muted">الشات مفتوح للاعبين في الغرفة.</p>';
   if (atBottom) log.scrollTop = log.scrollHeight;
+  if (chatSeen === undefined && !chatOpen) chatSeen = messages.at(-1)?.id ?? null;
+  updateChatBadge();
 }
 
 function playPhaseSound(previous) {
@@ -587,7 +644,16 @@ function stinger() {
   const band = document.createElement("div");
   band.className = "stinger";
   band.setAttribute("aria-hidden", "true");
-  band.innerHTML = `<span>${room.round ? `الجولة ${format(room.round)}` : ""}</span><strong>${phases[room.phase]}</strong>`;
+  const item = room.question;
+  const announcePick = item && (room.phase === "question" || room.phase === "write");
+  if (announcePick) {
+    // Everyone sees who chose the category before the question lands.
+    band.classList.add("pick", `cat-${item.category}`);
+    const mine = room.players.find((player) => player.id === room.playerId)?.name === item.pickedBy;
+    const who = !item.pickedBy ? "الوقت انتهى، والاختيار عشوائي" : mine ? "اخترت" : `<bdi>${e(item.pickedBy)}</bdi> اختار`;
+    band.innerHTML = `<span>${who}</span>
+      <strong><i class="symbol">${categories[item.category].icon}</i>${categories[item.category].title}</strong>`;
+  } else band.innerHTML = `<span>${room.round ? `الجولة ${format(room.round)}` : ""}</span><strong>${phases[room.phase]}</strong>`;
   document.body.append(band);
   band.addEventListener("animationend", () => band.remove(), { once: true });
   playSound("stinger");
@@ -774,6 +840,7 @@ async function fullscreen() {
 
 document.addEventListener("pointerdown", unlockSound, { passive: true });
 document.addEventListener("keydown", unlockSound);
+document.addEventListener("keydown", (event) => { if (event.key === "Escape" && chatOpen) toggleChat(false); });
 document.addEventListener("change", (event) => {
   const form = event.target.form;
   if (form?.dataset.form !== "create") return;
@@ -797,6 +864,7 @@ document.addEventListener("click", (event) => {
   else if (action === "fullscreen") void fullscreen();
   else if (action === "retry") void sync();
   else if (action === "zoom") openZoom();
+  else if (action === "chat-toggle") toggleChat();
   else if (action === "toggle-categories") {
     const form = button.closest("form");
     const boxes = [...form.querySelectorAll('input[name="category"]')];
