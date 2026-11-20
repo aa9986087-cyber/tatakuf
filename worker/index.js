@@ -571,6 +571,11 @@ export default {
           ...(image[2] === "svg" ? { "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox" } : {})
         });
       }
+      if ((pathname === "/logo.svg" || pathname === "/logo-mark.svg") && assets.logos) {
+        return response(assets.logos[pathname.slice(1)], "image/svg+xml", {
+          "Cache-Control": "public, max-age=86400", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+        });
+      }
       if (pathname === "/favicon.ico") return new Response(null, { status: 204 });
       if (pathname === "/" || /^\/room\/[23456789A-HJ-NP-Z]{6}\/?$/i.test(pathname)) {
         return response(assets.html, "text/html; charset=utf-8", {

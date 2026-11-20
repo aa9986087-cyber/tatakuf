@@ -766,11 +766,15 @@ function animateLeaderboard() {
   const rows = [...stageRoot().querySelectorAll(".rank-row[data-player]")];
   const nextRanks = new Map(rows.map((row, index) => [row.dataset.player, index]));
   if (!reducedMotion.matches) {
-    const height = rows[0]?.offsetHeight ?? 0;
+    // Cards fly in from the slot they held last round (the grid makes this two-dimensional).
+    const slots = rows.map((row) => row.getBoundingClientRect());
     for (const row of rows) {
       const before = previousRanks.get(row.dataset.player);
-      const shift = before === undefined ? 0 : (before - nextRanks.get(row.dataset.player)) * (height + 7);
-      if (shift) row.animate([{ transform: `translateY(${shift}px)` }, { transform: "none" }],
+      const now = nextRanks.get(row.dataset.player);
+      const slot = before === undefined ? null : slots[Math.min(before, slots.length - 1)];
+      const dx = slot ? slot.left - slots[now].left : 0;
+      const dy = slot ? slot.top - slots[now].top : 0;
+      if (dx || dy) row.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }],
         { duration: 750, delay: 650, easing: "cubic-bezier(.2,.8,.2,1)", fill: "backwards" });
       const counter = row.querySelector("[data-count]");
       const from = previousScores.get(row.dataset.player) ?? 0;

@@ -644,3 +644,25 @@ input::placeholder { -webkit-text-fill-color: #8d97b8; color: #8d97b8; }
 .cat-general { --category: #f8d581; }
 .check-category .symbol { -webkit-text-fill-color: var(--muted); }
 .check-category:has(input:checked) .symbol { -webkit-text-fill-color: #1b1f2e; }
+
+/* Logo */
+.brand-mark { width: 46px; height: 46px; flex: 0 0 auto; filter: drop-shadow(0 4px 14px #f6bd5833); }
+.signature { display: inline-flex; align-items: center; gap: 12px; }
+.signature-logo { width: auto; height: 70px; }
+@media (max-width: 420px) { .brand-mark { width: 38px; height: 38px; } .signature-logo { height: 58px; } }
+
+/* Results as a grid of cards, like the answer options; the leader gets the full row */
+.rank-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.rank-row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "medal name gain" "medal score score";
+  align-items: center; gap: 2px 10px; min-height: 66px; padding: 10px 12px; border-radius: 15px;
+}
+.rank-medal { grid-area: medal; width: 34px; height: 34px; }
+.rank-name { grid-area: name; font-size: 15px; }
+.round-gain { grid-area: gain; justify-self: end; }
+.rank-score { grid-area: score; margin: 0; justify-self: start; font-size: 19px; }
+.rank-row:first-child { grid-column: 1 / -1; min-height: 76px; padding: 12px 16px; }
+.rank-row:first-child .rank-medal { width: 44px; height: 44px; font-size: 20px; }
+.rank-row:first-child .rank-name { font-size: 18px; }
+.rank-row:first-child .rank-score { font-size: 24px; }
+.rank-row:last-child:nth-child(even) { grid-column: 1 / -1; }

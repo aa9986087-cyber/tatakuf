@@ -53,7 +53,8 @@ export async function build() {
     ...Object.entries(questions).map(([id, items]) => [id, items.length]),
     ...Object.entries(bluffQuestions).map(([id, items]) => ["bluff." + id, items.length])
   ]);
-  const assets = { html, css, js: `const bankCounts = ${JSON.stringify(counts)};\n${js}`, sound, qr, hero: hero.toString("base64"), questionImages };
+  const logos = Object.fromEntries(await Promise.all(["logo.svg", "logo-mark.svg"].map(async (file) => [file, await readFile(`ui/${file}`, "utf8")])));
+  const assets = { html, css, js: `const bankCounts = ${JSON.stringify(counts)};\n${js}`, sound, qr, hero: hero.toString("base64"), questionImages, logos };
   await Promise.all([
     writeFile("dist/server/index.js", `const assets = ${JSON.stringify(assets)};\nconst questions = ${JSON.stringify(questions)};\nconst bluffQuestions = ${JSON.stringify(bluffQuestions)};\n${worker}`),
     writeFile("dist/.openai/hosting.json", manifest),

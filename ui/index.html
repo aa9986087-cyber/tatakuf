@@ -5,14 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070b1c">
   <meta name="description" content="لعبة التكاتف، مسابقة أسئلة من الرافعية. العب على شاشة المجلس أو مع ربعك عن بُعد أو تحدَّ البوتات.">
+  <link rel="icon" type="image/svg+xml" href="/logo-mark.svg?v=1">
   <title>لعبة التكاتف | تحدّي الأسئلة</title>
-  <link rel="stylesheet" href="/style.css?v=10">
-  <script type="module" src="/app.js?v=10"></script>
+  <link rel="stylesheet" href="/style.css?v=11">
+  <script type="module" src="/app.js?v=11"></script>
 </head>
 <body>
   <header class="topbar shell">
     <a class="wordmark" href="/" aria-label="لعبة التكاتف، الرئيسية">
-      <span class="brand-icon" aria-hidden="true">ت</span>
+      <img class="brand-mark" src="/logo-mark.svg?v=1" width="44" height="44" alt="">
       <span>لعبة <strong>التكاتف</strong></span>
     </a>
     <div class="nav-actions">
@@ -23,7 +24,8 @@
   <main class="shell" id="app"></main>
   <footer class="shell footer">
     <span class="footer-brand"><span class="small-mark" aria-hidden="true">✦</span> لعبة التكاتف</span>
-    <span class="signature">صُمّمت في <strong>الرافعية</strong> على يد <bdi>Vamos</bdi></span>
+    <span class="signature"><img class="signature-logo" src="/logo.svg?v=1" width="520" height="511" alt="الرافعية × Vamos">
+      <span>صُمّمت في <strong>الرافعية</strong> على يد <bdi>Vamos</bdi></span></span>
   </footer>
   <dialog id="dialog" class="dialog" aria-labelledby="dialog-title"><div id="dialog-content"></div></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

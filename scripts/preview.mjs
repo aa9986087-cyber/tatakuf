@@ -45,7 +45,9 @@ export async function buildPreview() {
     .replace(/^export default qrcode;$/m, "")
     .replace("export const stringToBytes", "const stringToBytes");
   const workerCode = replaceOnce(worker, "export default {", "return {");
-  const body = html.slice(html.indexOf("<body>") + 6, html.indexOf("</body>"));
+  const logoUri = async (file) => "data:image/svg+xml;base64," + (await readFile(`ui/${file}`)).toString("base64");
+  const body = html.slice(html.indexOf("<body>") + 6, html.indexOf("</body>"))
+    .replace("/logo-mark.svg?v=1", await logoUri("logo-mark.svg")).replace("/logo.svg?v=1", await logoUri("logo.svg"));
 
   // The page is embedded in a host skeleton without the original <html lang="ar" dir="rtl">, so set it first.
   const page = `<title>لعبة التكاتف</title>

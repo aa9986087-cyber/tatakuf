@@ -396,3 +396,15 @@ test("everyone sees who picked the category, or that the clock picked it", async
   assert.equal(timedOut.phase, "question");
   assert.equal(timedOut.question.pickedBy, null);
 });
+
+test("the logo files are served as sandboxed SVG", async () => {
+  for (const file of ["logo.svg", "logo-mark.svg"]) {
+    const response = await worker.fetch(new Request(`https://quiz.example/${file}`), {});
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "image/svg+xml");
+    assert.match(response.headers.get("content-security-policy"), /sandbox/);
+    assert.match(await response.text(), /^<svg/);
+  }
+  const page = await (await worker.fetch(new Request("https://quiz.example/"), {})).text();
+  assert.match(page, /rel="icon"[^>]+logo-mark\.svg/);
+});
