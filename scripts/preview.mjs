@@ -42,7 +42,9 @@ export async function buildPreview() {
   const workerCode = replaceOnce(worker, "export default {", "return {");
   const body = html.slice(html.indexOf("<body>") + 6, html.indexOf("</body>"));
 
+  // The page is embedded in a host skeleton without the original <html lang="ar" dir="rtl">, so set it first.
   const page = `<title>لعبة التكاتف</title>
+<script>document.documentElement.lang = "ar"; document.documentElement.dir = "rtl";</script>
 <style>${css}
 .preview-bar { position: fixed; inset: auto 0 0; z-index: 50; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center;
   padding: 8px max(16px, env(safe-area-inset-left, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)); background: #0b1d15ee; border-top: 1px solid #3c6350;
