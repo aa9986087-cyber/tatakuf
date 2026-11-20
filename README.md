@@ -12,7 +12,7 @@
 
 ## إضافة أسئلة
 
-يضم [بنك الأسئلة](worker/questions.json) أكثر من ٣٠٠٠ سؤال عربي في تسع فئات (منها «أفلام ومسلسلات» و«باب الحارة» من الجزء الأول إلى الخامس و«أعلام الدول»)، ويضم [بنك الخدعة](worker/bluff.json) أسئلة سردية لكل فئة، مع صور لأسئلة التعرّف البصري. أضف كل سؤال في نهاية الفئة المناسبة. ترتيب القيم هو السؤال، ثم الإجابة الصحيحة، ثم ثلاثة خيارات خاطئة. اللعبة تخلط ترتيب الخيارات عند العرض.
+يضم [بنك الأسئلة](worker/questions.json) نحو ٢٤٠٠ سؤال كلاسيكي في تسع فئات (منها «أفلام ومسلسلات» و«باب الحارة» من الجزء الأول إلى الخامس و«أعلام الدول»)، ويضم [بنك الخدعة](worker/bluff.json) نحو ٥٥٠ سؤالًا سرديًا. كل الأسئلة والخيارات بالعربي فقط، والاختبارات ترفض أي حرف غير عربي، مع صور لأسئلة التعرّف البصري. أضف كل سؤال في نهاية الفئة المناسبة. ترتيب القيم هو السؤال، ثم الإجابة الصحيحة، ثم ثلاثة خيارات خاطئة. اللعبة تخلط ترتيب الخيارات عند العرض.
 
 ```json
 ["كم ضلعًا في المربع؟", "٤", "٣", "٥", "٦"]
@@ -20,7 +20,7 @@
 
 لإضافة صورة، ضع ملف WebP أو SVG في `ui/questions/` وأضف قيمة سادسة للسؤال بالشكل `{"file":"example.webp","alt":"وصف يوضح ما في الصورة"}`. استخدم `npm test` للتحقق من الأسئلة. إضافة الأسئلة في نهاية القائمة تحفظ معرّفات الأسئلة التي ظهرت في الغرف القائمة. يحتفظ المتصفح بسجل الأسئلة التي ظهرت، وتستبعد الغرفة سجل المشاركين عند إنشاء المباراة أو الانضمام.
 
-تتضمن الأسئلة صياغات أصلية وتمارين حساب ومنطق، بالإضافة إلى حقائق عن الدول والعناصر والرياضة والأدب والتاريخ. [Country Codes](https://github.com/datasets/country-codes) · [PubChem](https://pubchem.ncbi.nlm.nih.gov/periodic-table/) · [OpenFootball](https://github.com/openfootball/football.json) · [Open Library](https://openlibrary.org/developers/licensing) · [Nobel Prize](https://nobelprize.readme.io/reference/getting-started) · [World Factbook](https://github.com/factbook/factbook.json)
+تتضمن الأسئلة صياغات أصلية وتمارين حساب ومنطق، بالإضافة إلى حقائق عن الدول والعناصر والرياضة والأدب والتاريخ. [Country Codes](https://github.com/datasets/country-codes) · [PubChem](https://pubchem.ncbi.nlm.nih.gov/periodic-table/) · [OpenFootball](https://github.com/openfootball/football.json) · [Open Library](https://openlibrary.org/developers/licensing) · [Nobel Prize](https://nobelprize.readme.io/reference/getting-started) · [World Factbook](https://github.com/factbook/factbook.json) · [world-countries](https://github.com/mledoze/countries) · [Unicode CLDR](https://cldr.unicode.org/) (أسماء الدول والعملات واللغات بالعربية)
 
 ## التشغيل والتسليم
 

@@ -99,7 +99,11 @@ test("two independent players complete a match and rematch with fresh questions"
 });
 
 test("the bank contains thousands of unique questions and displays illustrated questions safely", async (t) => {
-  assert.ok(Object.values(bank).flat().length >= 3000);
+  assert.ok(Object.values(bank).flat().length >= 2400);
+  // Every question and option is written in Arabic: no Latin or other non-Arabic letters.
+  for (const item of [...Object.values(bank), ...Object.values(bluffBank)].flat()) {
+    for (const text of item.slice(0, 5)) assert.doesNotMatch(text, /[\p{L}--[\p{Script=Arabic}ـ]]/v, text);
+  }
   const { request } = await setup(t);
   const created = await request("", { mode: "screen", name: "راشد", rounds: 20, seconds: 20, categories: ["culture"] });
   const path = `/${created.data.room.code}`;
