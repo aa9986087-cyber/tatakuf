@@ -31,7 +31,7 @@ async function setup(t, seconds = 20) {
   const guest = (action = "", body) => request(path + action, body, joined.data.token);
   assert.equal((await host()).data.room.players.length, 2);
   assert.equal((await guest("/start", {})).status, 403);
-  return { request, path, host, guest };
+  return { request, path, host, guest, db };
 }
 
 test("two independent players complete a match and rematch with fresh questions", async (t) => {
@@ -98,13 +98,13 @@ test("two independent players complete a match and rematch with fresh questions"
 test("the bank contains thousands of unique questions and displays illustrated questions safely", async (t) => {
   assert.ok(Object.values(bank).flat().length >= 3000);
   const { request } = await setup(t);
-  const created = await request("", { mode: "screen", rounds: 20, seconds: 20, categories: ["culture"] });
+  const created = await request("", { mode: "screen", name: "راشد", rounds: 20, seconds: 20, categories: ["culture"] });
   const path = `/${created.data.room.code}`;
   const display = (action = "", body) => request(path + action, body, created.data.token);
   const first = await request(path + "/join", { name: "بدر" });
-  await request(path + "/join", { name: "فيصل" });
   await display("/start", {});
-  const phone = await request(path + "/category", { round: 1, category: "culture" }, first.data.token);
+  await display("/category", { round: 1, category: "culture" });
+  const phone = await request(path, undefined, first.data.token);
   assert.equal(phone.data.room.question.image, undefined);
   const screenImage = (await display()).data.room.question.image;
   assert.ok(screenImage.alt);
@@ -159,37 +159,92 @@ test("online chat is scoped to room members, accepts simultaneous senders, and d
   assert.deepEqual(state.chat.map(({ text }) => text).sort(), ["هلا بالربع 👋", "يا هلا"]);
 });
 
-test("shared screen shows the question and display host cannot answer for the two phones", async (t) => {
+test("shared screen host plays from the display and one phone is enough to start", async (t) => {
   const { request } = await setup(t);
-  const created = await request("", { mode: "screen", rounds: 5, seconds: 20, categories: ["science"] });
+  assert.equal((await request("", { mode: "screen", rounds: 5, seconds: 20, categories: ["science"] })).status, 400);
+  const created = await request("", { mode: "screen", name: "ناصر", rounds: 5, seconds: 20, categories: ["science"] });
   assert.equal(created.status, 201);
   const path = `/${created.data.room.code}`;
   assert.equal((await request(path + "/invite")).data.mode, "screen");
   assert.equal(created.data.room.display, true);
-  assert.equal(created.data.room.players.length, 0);
+  assert.equal(created.data.room.spectator, false);
+  assert.deepEqual(created.data.room.players.map(({ name }) => name), ["ناصر"]);
+  assert.equal(created.data.room.hostId, created.data.room.playerId);
   const display = (action = "", body) => request(path + action, body, created.data.token);
   assert.equal((await display("/start", {})).status, 409);
-  const join = async (name) => {
-    const joined = await request(path + "/join", { name });
-    assert.equal(joined.data.room.display, false);
-    return (action = "", body) => request(path + action, body, joined.data.token);
-  };
-  const first = await join("علي");
-  assert.equal((await display("/start", {})).status, 409);
-  const second = await join("يوسف");
+  assert.equal((await request(path + "/join", { name: "ناصر" })).status, 409);
+  const joined = await request(path + "/join", { name: "علي" });
+  assert.equal(joined.data.room.display, false);
+  const phone = (action = "", body) => request(path + action, body, joined.data.token);
+  assert.equal((await phone("/start", {})).status, 403);
   const started = (await display("/start", {})).data.room;
-  assert.equal((await first()).data.room.playerId, started.chooserId);
-  const question = (await first("/category", { round: 1, category: "science" })).data.room.question;
-  assert.equal(question.prompt, null);
-  assert.equal(question.correctIndex, undefined);
-  const screen = (await display()).data.room;
+  assert.equal(started.phase, "select");
+  assert.equal(started.chooserId, started.playerId);
+  assert.equal((await phone("/category", { round: 1, category: "science" })).status, 403);
+  const screen = (await display("/category", { round: 1, category: "science" })).data.room;
   assert.ok(screen.question.prompt);
-  assert.deepEqual(screen.question.options, question.options);
-  assert.deepEqual((await second()).data.room.question, question);
-  const answer = { questionId: question.id, option: 0 };
-  assert.equal((await display("/answer", answer)).status, 403);
-  await Promise.all([first("/answer", answer), second("/answer", answer)]);
-  assert.equal((await display()).data.room.phase, "reveal");
+  assert.equal(screen.question.correctIndex, undefined);
+  const phoneQuestion = (await phone()).data.room.question;
+  assert.equal(phoneQuestion.prompt, null);
+  assert.deepEqual(phoneQuestion.options, screen.question.options);
+  const answer = { questionId: screen.question.id, option: 2 };
+  const locked = (await display("/answer", answer)).data.room;
+  assert.equal(locked.phase, "question");
+  assert.equal(locked.answeredCount, 1);
+  assert.equal((await display("/answer", { ...answer, option: 1 })).data.room.yourAnswer, 2);
+  const revealed = (await phone("/answer", { ...answer, option: 0 })).data.room;
+  assert.equal(revealed.phase, "reveal");
+  assert.equal(revealed.answeredCount, 2);
+  assert.equal(revealed.players.length, 2);
+});
+
+test("a legacy display-only screen room seats its host with the same link and token", async (t) => {
+  const { request, db } = await setup(t);
+  const legacyRoom = async (players = []) => {
+    const created = await request("", { mode: "screen", name: "مؤقت", rounds: 5, seconds: 20, categories: ["science"] });
+    const { code } = created.data.room;
+    const row = await db.prepare("SELECT state FROM rooms WHERE code = ?").bind(code).first();
+    const state = JSON.parse(row.state);
+    state.screenHost = { ...state.players[0], name: "شاشة المجلس" };
+    state.players = players;
+    delete state.displayId;
+    await db.prepare("UPDATE rooms SET state = ? WHERE code = ?").bind(JSON.stringify(state), code).run();
+    return { path: `/${code}`, token: created.data.token };
+  };
+
+  const { path, token } = await legacyRoom();
+  const display = (action = "", body) => request(path + action, body, token);
+  const before = (await display()).data.room;
+  assert.equal(before.display, true);
+  assert.equal(before.spectator, true);
+  assert.equal(before.players.length, 0);
+  const phone = await request(path + "/join", { name: "علي" });
+  assert.equal((await display("/start", {})).status, 409);
+  assert.equal((await display("/join", { name: "علي" })).status, 409);
+  const seated = await display("/join", { name: "سعد" });
+  assert.equal(seated.status, 200);
+  assert.equal(seated.data.token, token);
+  assert.equal(seated.data.room.code, path.slice(1));
+  assert.equal(seated.data.room.playerId, before.playerId);
+  assert.equal(seated.data.room.display, true);
+  assert.equal(seated.data.room.spectator, false);
+  assert.deepEqual(seated.data.room.players.map(({ name }) => name), ["سعد", "علي"]);
+  assert.equal((await display("/join", { name: "سعد" })).status, 200);
+  assert.equal((await display()).data.room.players.length, 2);
+  const started = (await display("/start", {})).data.room;
+  assert.equal(started.chooserId, started.playerId);
+  const question = (await display("/category", { round: 1, category: "science" })).data.room.question;
+  assert.ok(question.prompt);
+  await display("/answer", { questionId: question.id, option: 0 });
+  const revealed = (await request(path + "/answer", { questionId: question.id, option: 0 }, phone.data.token)).data.room;
+  assert.equal(revealed.phase, "reveal");
+
+  const full = await legacyRoom(Array.from({ length: 8 }, (_, index) => ({
+    id: crypto.randomUUID(), token: crypto.randomUUID(), name: `لاعب ${index + 1}`, score: 0
+  })));
+  assert.equal((await request(full.path + "/join", { name: "سعد" }, full.token)).status, 409);
+  assert.equal((await request(full.path + "/answer", { questionId: "x", option: 0 }, full.token)).status, 403);
+  assert.equal((await request(full.path, undefined, full.token)).data.room.spectator, true);
 });
 
 test("bots choose their category and submit answers on the server clock", async (t) => {

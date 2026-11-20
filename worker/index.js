@@ -50,6 +50,29 @@ function hostOf(room) {
   return room.screenHost ?? room.players[0];
 }
 
+// Rooms created before the host could play keep a display-only `screenHost` outside `players`.
+function isDisplay(room, player) {
+  return room.displayId === player.id || room.screenHost?.id === player.id;
+}
+
+function nameTaken(room, name) {
+  return room.players.some((entry) => entry.name.toLocaleLowerCase("ar") === name.toLocaleLowerCase("ar"));
+}
+
+function seatLegacyDisplay(room, input) {
+  if (room.phase !== "lobby") throw new GameError(409, "المباراة بدأت. أنشئ غرفة جديدة عشان تلعب من الشاشة.");
+  if (room.players.length >= maxPlayers) throw new GameError(409, "الغرفة ممتلئة.");
+  const name = normalizeName(input.name);
+  if (nameTaken(room, name)) throw new GameError(409, "الاسم مستخدم في الغرفة. جرّب اسمًا ثانيًا.");
+  addHistory(room, input.history);
+  requireEnoughQuestions(room);
+  const { id, token } = room.screenHost;
+  room.players.unshift({ id, token, name, score: 0 });
+  room.displayId = id;
+  delete room.screenHost;
+  return room.players[0];
+}
+
 function getSettings(input) {
   const { rounds, seconds, categories } = input;
   if (![5, 10, 20].includes(rounds) || ![15, 20, 30].includes(seconds) ||
@@ -180,7 +203,7 @@ function advanceByClock(room, now) {
 
 function viewRoom(room, player, revision, now = Date.now()) {
   const mode = room.mode ?? "online";
-  const display = room.screenHost?.id === player.id;
+  const display = isDisplay(room, player);
   const answered = Object.hasOwn(room.answers, player.id);
   const showAnswer = room.phase === "reveal";
   const showStandings = room.phase !== "finale" && !(showAnswer && room.round === room.settings.rounds);
@@ -196,7 +219,7 @@ function viewRoom(room, player, revision, now = Date.now()) {
 
   return {
     code: room.code, phase: room.phase, round: room.round, deadline: room.deadline, revision, now,
-    mode, display, settings: room.settings, playerId: player.id, hostId: hostOf(room).id,
+    mode, display, spectator: room.screenHost?.id === player.id, settings: room.settings, playerId: player.id, hostId: hostOf(room).id,
     players: room.players.map(({ id, name, score, bot }) => ({
       id, name, bot: Boolean(bot),
       ...(showStandings ? { score } : {}),
@@ -215,10 +238,10 @@ function viewRoom(room, player, revision, now = Date.now()) {
 async function createRoom(db, input) {
   const mode = input.mode ?? "online";
   if (!modes.includes(mode)) throw new GameError(400, "اختر طريقة لعب من القائمة.");
-  const name = mode === "screen" ? "شاشة المجلس" : normalizeName(input.name);
+  const name = normalizeName(input.name);
   const settings = getSettings(input);
   const owner = makePlayer(name);
-  const players = mode === "screen" ? [] : [owner];
+  const players = [owner];
   if (mode === "bots") {
     if (!Number.isInteger(input.bots) || input.bots < 1 || input.bots > botNames.length ||
         typeof input.difficulty !== "string" || !Object.hasOwn(botAccuracy, input.difficulty)) {
@@ -235,7 +258,7 @@ async function createRoom(db, input) {
     const code = randomCode();
     const room = {
       code, mode, settings, players, phase: "lobby", round: 0,
-      ...(mode === "screen" ? { screenHost: owner } : {}),
+      ...(mode === "screen" ? { displayId: owner.id } : {}),
       deadline: null, used: [], seen: [], answers: {}, question: null
     };
     addHistory(room, input.history);
@@ -270,7 +293,7 @@ function applyAction(room, player, action, input, now) {
     return true;
   }
   if (action === "answer") {
-    if (room.screenHost?.id === player.id) throw new GameError(403, "جاوب من جوالك بعد الانضمام للغرفة.");
+    if (room.screenHost?.id === player.id) throw new GameError(403, "سجّل اسمك في الغرفة أولًا عشان تجاوب.");
     if (room.phase !== "question" || room.question.id !== input.questionId) throw new GameError(409, "انتهى وقت الإجابة.");
     if (!Number.isInteger(input.option) || input.option < 0 || input.option > 3) throw new GameError(400, "اختر إجابة من الخيارات.");
     if (Object.hasOwn(room.answers, player.id)) return false;
@@ -322,13 +345,16 @@ async function roomRequest(db, code, action, input, token) {
       if (room.phase !== "lobby") throw new GameError(409, "المباراة بدأت. اطلب من المضيف رابط غرفة جديدة.");
       if (room.players.length >= maxPlayers) throw new GameError(409, "الغرفة ممتلئة.");
       const name = normalizeName(input.name);
-      if (room.players.some((entry) => entry.name.toLocaleLowerCase("ar") === name.toLocaleLowerCase("ar"))) {
+      if (nameTaken(room, name)) {
         throw new GameError(409, "الاسم مستخدم في الغرفة. جرّب اسمًا ثانيًا.");
       }
       addHistory(room, input.history);
       requireEnoughQuestions(room);
       player = makePlayer(name);
       room.players.push(player);
+      changed = true;
+    } else if (action === "join" && room.screenHost?.id === player.id) {
+      player = seatLegacyDisplay(room, input);
       changed = true;
     }
     if (!player) throw new GameError(401, "انضم للغرفة باسمك أولًا.");
@@ -377,8 +403,18 @@ function json(data, status = 200) {
   return Response.json(data, { status, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
 }
 
+// A fresh D1 database (for example on a new Cloudflare account) gets the same schema as drizzle/0000_rooms.sql.
+const schemaReady = new WeakSet();
+async function ensureSchema(db) {
+  if (schemaReady.has(db)) return;
+  await db.prepare("CREATE TABLE IF NOT EXISTS rooms (code TEXT PRIMARY KEY, version INTEGER NOT NULL DEFAULT 0, expires_at INTEGER NOT NULL, state TEXT NOT NULL)").bind().run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS rooms_expires_at ON rooms(expires_at)").bind().run();
+  schemaReady.add(db);
+}
+
 async function handleApi(request, pathname, db) {
   if (!db) throw new Error("Missing DB binding");
+  await ensureSchema(db);
   if (request.method === "POST" && pathname === "/api/rooms") {
     return json(await createRoom(db, await readInput(request)), 201);
   }

@@ -180,6 +180,7 @@ legend { font-weight: 800; margin-bottom: 9px; }
 .room-invite.with-qr h2 { font-size: clamp(24px, 4vw, 48px); }
 .room-invite p { color: var(--muted); margin-top: 0; }
 .qr-block { margin: 0; text-align: center; min-width: 0; }
+.seat-form { margin-top: 14px; max-width: 380px; }
 .qr-block canvas { display: block; width: clamp(140px, 23vw, 250px); height: auto; max-width: 100%; border: 4px solid #e7d5a6; border-radius: 14px; background: white; image-rendering: pixelated; }
 .qr-block figcaption { margin-top: 6px; color: var(--muted); font-size: 14px; }
 .players { list-style: none; padding: 0; margin: 0; display: grid; gap: 7px; }

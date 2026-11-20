@@ -10,7 +10,7 @@ const categories = {
   culture: { title: "ثقافة وفنون", icon: "♫" }
 };
 const modes = {
-  screen: { title: "شاشة المجلس", choice: "أنشئ عرض المجلس", description: "الأسئلة على الشاشة الكبيرة، والإجابات من جوالاتكم." },
+  screen: { title: "شاشة المجلس", choice: "أنشئ عرض المجلس", description: "الأسئلة على الشاشة الكبيرة، وأنت تجاوب منها وربعك من جوالاتهم." },
   online: { title: "لعب عن بُعد", choice: "أنشئ غرفة أونلاين", description: "شارك رابط الغرفة وتحدَّ ربعك من أي مكان، مع شات للغرفة." },
   bots: { title: "تحدّي البوتات", choice: "جهّز خصومك", description: "اختر عدد الخصوم الآليين وصعوبتهم وتحدّاهم لحالك." }
 };
@@ -28,6 +28,7 @@ const codePattern = /^[23456789A-HJ-NP-Z]{6}$/;
 const roomCode = window.location.pathname.split("/")[2]?.toUpperCase();
 const storageKey = `tahaddi-alrabaa:${roomCode}`;
 const historyKey = "tatakuf-question-history";
+const nameKey = "tatakuf-player-name";
 const letters = ["أ", "ب", "ج", "د"];
 let room;
 let token = roomCode ? sessionStorage.getItem(storageKey) : null;
@@ -39,6 +40,8 @@ let lastTick;
 let stageKey;
 let chatKey;
 let seenQuestions = readHistory();
+let seatAttempted = false;
+let seatError = "";
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({
@@ -110,8 +113,16 @@ function showHome() {
     </section>`;
 }
 
+function savedName() {
+  try { return localStorage.getItem(nameKey) ?? ""; } catch { return ""; }
+}
+
+function rememberName(name) {
+  try { localStorage.setItem(nameKey, String(name ?? "").trim()); } catch { /* The name field stays empty next time. */ }
+}
+
 function nameField() {
-  return '<label class="field">اسمك في اللعبة<input name="name" required maxlength="24" placeholder="مثال، أبو ناصر" autocomplete="nickname" dir="auto"></label>';
+  return `<label class="field">اسمك في اللعبة<input name="name" required maxlength="24" placeholder="مثال، أبو ناصر" autocomplete="nickname" dir="auto" value="${e(savedName())}"></label>`;
 }
 
 function openDialog(title, description, html) {
@@ -127,7 +138,8 @@ function openCreate(mode) {
   seenQuestions = new Set([...readHistory(), ...seenQuestions]);
   openDialog(modes[mode].title, modes[mode].description, `
     <form class="setup-form" data-form="create" data-mode="${mode}">
-      ${mode === "screen" ? "" : nameField()}
+      ${nameField()}
+      ${mode === "screen" ? '<p class="muted">تدخل لاعبًا وتجاوب من نفس الشاشة، ويكفي انضمام لاعب واحد معك لبدء الجلسة.</p>' : ""}
       ${mode === "bots" ? `<div class="form-row">
         <label class="field">عدد البوتات<select name="bots">${Array.from({ length: 7 }, (_, index) => {
           const count = index + 1;
@@ -151,7 +163,7 @@ function openCreate(mode) {
 
 function openHelp() {
   openDialog("طريقة اللعب", "", `<ol class="instructions">
-    <li><strong>شاشة المجلس</strong> افتحها على الشاشة الكبيرة، وخَلّ اللاعبين يمسحون رمز QR بجوالاتهم.</li>
+    <li><strong>شاشة المجلس</strong> افتحها على الشاشة الكبيرة وسجّل اسمك لتجاوب منها، وخَلّ ربعك يمسحون رمز QR بجوالاتهم. يكفي لاعب واحد معك للبدء.</li>
     <li><strong>عن بُعد</strong> شارك الرابط مع ربعك وافتحوا الشات في نفس الغرفة.</li>
     <li><strong>ضد البوتات</strong> اختر عدد الخصوم ومستواهم وابدأ التحدّي.</li>
     <li>الاختيار بين الفئات بالدور، والإجابة الصحيحة بنقطة. يظهر الترتيب وتبدأ الجولة التالية تلقائيًا، وبعد آخر سؤال تُكشف النتيجة النهائية.</li>
@@ -233,7 +245,8 @@ function lobby() {
   const settings = room.settings;
   const count = room.players.length;
   const title = room.display ? "امسحوا الرمز بجوالاتكم" : room.mode === "bots" ? "خصومك جاهزين" : "الغرفة مفتوحة";
-  const hint = room.display ? "اعرض الصفحة على شاشة المجلس. كل لاعب ينضم ويختار إجابته من جواله."
+  const hint = room.spectator ? "سجّل اسمك لتدخل لاعبًا من هذه الشاشة، أو اترك الشاشة للعرض فقط."
+    : room.display ? "اعرض الصفحة على شاشة المجلس. أنت تجاوب من هنا، وربعك من جوالاتهم. يكفي لاعب واحد معك للبدء."
     : room.mode === "bots" ? "ابدأ المباراة وتناوب على اختيار الفئات مع البوتات."
     : room.mode === "screen" ? "خلّ الشاشة قدامك واستعد للإجابة من هنا."
     : "شارك الرابط مع ربعك. تقدرون تبدأون وأنتم لاعبين.";
@@ -245,6 +258,9 @@ function lobby() {
         ${host ? actionButton("ابدأ المباراة", "start", "primary", count < 2 ? "disabled" : "") : ""}
         ${room.display ? actionButton("ملء الشاشة", "fullscreen", "outline") : ""}
       </div>
+      ${room.spectator ? `<form class="setup-form seat-form" data-form="seat">${nameField()}
+        <p class="error" data-error role="alert">${e(seatError)}</p>
+        <button class="btn outline" type="submit">ادخل لاعبًا من الشاشة</button></form>` : ""}
     </div>
     ${room.display ? `<figure class="qr-block"><canvas data-room-qr aria-label="رمز QR للانضمام"></canvas><figcaption>${e(room.code)}</figcaption></figure>` : ""}
   </section>
@@ -287,15 +303,16 @@ function questionView() {
     ${item.image ? `<img class="question-image" src="/questions/${e(item.image.file)}" alt="${e(item.image.alt)}" width="750" height="500">` : ""}
   </section>
   <div class="options" aria-label="خيارات الإجابة">${item.options.map((option, index) => {
-    const selected = index === room.yourAnswer;
+    // The shared screen never highlights the host's pick so the room cannot see it.
+    const selected = !room.display && index === room.yourAnswer;
     const style = selected ? "selected" : "";
     const content = `<span class="option-mark" aria-hidden="true">${letters[index]}</span><bdi>${e(option)}</bdi>`;
-    if (room.display) return `<div class="option ${style}">${content}</div>`;
+    if (room.spectator) return `<div class="option">${content}</div>`;
     return `<button type="button" class="option ${style}" data-action="answer" data-option="${index}"
       ${answered || pending ? "disabled" : ""}>${content}</button>`;
   }).join("")}</div>
   <section class="panel feedback">
-    <h2>${room.display ? "الإجابات من الجوالات" : answered ? "تم تسجيل إجابتك" : "اختر إجابة واحدة"}</h2>
+    <h2>${room.spectator ? "الإجابات من الجوالات" : answered ? "تم تسجيل إجابتك" : "اختر إجابة واحدة"}</h2>
     <p class="muted">${progress}</p>
   </section>${scores()}`;
 }
@@ -435,6 +452,24 @@ function renderRoom(next, force = false) {
   }
   updateChat();
   updateTimer();
+  if (room.spectator && room.phase === "lobby" && !seatAttempted && savedName()) {
+    seatAttempted = true;
+    void seatDisplayHost(savedName());
+  }
+}
+
+// Older shared-screen rooms started with a display-only host. Seat it as a player with the same token and link.
+async function seatDisplayHost(name) {
+  seatError = "";
+  try {
+    const joined = await api(`/api/rooms/${roomCode}/join`, { name, history: questionHistory() });
+    rememberName(name);
+    renderRoom(joined.room, true);
+    playSound("join");
+  } catch (error) {
+    seatError = error.status ? error.message : "تعذّر الاتصال. جرّب مرة ثانية.";
+    if (room) renderRoom(room, true);
+  }
 }
 
 function updateTimer() {
@@ -597,6 +632,14 @@ document.addEventListener("submit", async (event) => {
   if (!kind) return;
   event.preventDefault();
   if (kind === "chat") { await sendChat(form); return; }
+  if (kind === "seat") {
+    const button = form.querySelector('button[type="submit"]');
+    if (button.disabled) return;
+    button.disabled = true;
+    seatAttempted = true;
+    await seatDisplayHost(new FormData(form).get("name"));
+    return;
+  }
   const data = new FormData(form);
   const errorElement = form.querySelector("[data-error]");
   errorElement.textContent = "";
@@ -614,6 +657,7 @@ document.addEventListener("submit", async (event) => {
       const picked = data.getAll("category");
       if (!picked.length) throw Object.assign(new Error("اختر فئة واحدة على الأقل."), { status: 400 });
       const mode = form.dataset.mode;
+      if (data.get("name") !== null) rememberName(data.get("name"));
       const created = await api("/api/rooms", {
         mode, name: data.get("name"), rounds: Number(data.get("rounds")), seconds: Number(data.get("seconds")), categories: picked,
         history: questionHistory(),
@@ -623,6 +667,7 @@ document.addEventListener("submit", async (event) => {
       window.location.assign(`/room/${created.room.code}`);
     } else {
       const joined = await api(`/api/rooms/${roomCode}/join`, { name: data.get("name"), history: questionHistory() });
+      rememberName(data.get("name"));
       token = joined.token;
       sessionStorage.setItem(storageKey, token);
       renderRoom(joined.room);
