@@ -377,6 +377,18 @@ function questionCard(item, hint = "شوف السؤال على الشاشة") {
   </section>`;
 }
 
+// Small name chips: lit while a player is still thinking, dimmed once they have answered.
+function presence() {
+  if (!room.answeredIds) return "";
+  const answered = new Set(room.answeredIds);
+  const waiting = room.players.filter((player) => !answered.has(player.id)).length;
+  return `<ul class="presence" aria-label="${waiting ? `باقي ${format(waiting)} ما جاوبوا` : "الكل جاوب"}">${room.players.map((player) => {
+    const done = answered.has(player.id);
+    return `<li class="${done ? "done" : "waiting"}" title="${e(player.name)}: ${done ? "جاوب" : "ما جاوب للحين"}">
+      <span class="presence-dot" aria-hidden="true"></span><bdi>${e(player.name)}</bdi></li>`;
+  }).join("")}</ul>`;
+}
+
 function pickedLabel(item) {
   if (!item.pickedBy) return "اختيار عشوائي";
   const mine = room.players.find((player) => player.id === room.playerId)?.name === item.pickedBy;
@@ -399,6 +411,7 @@ function writeView() {
         </form>
         <p class="fake-error" data-fake-error role="alert" ${fakeError ? "" : "hidden"}>${e(fakeError)}</p>
         <p class="muted">${room.display ? "الكتابة مخفية عشان ما يشوفها أحد في المجلس." : "كل لاعب ينخدع بجوابك يعطيك نقطة، والإجابة الصحيحة بنقطة."}</p>`}
+    ${presence()}
     <p class="muted progress">${progress}</p>
   </section>`;
 }
@@ -421,6 +434,7 @@ function questionView() {
     return `<button type="button" class="option ${style}${own.has(index) ? " own" : ""}" data-action="answer" data-option="${index}" style="--i:${index}"
       ${answered || pending || own.has(index) ? "disabled" : ""}>${content}</button>`;
   }).join("")}</div>
+  ${presence()}
   <p class="answer-status${answered ? " done" : ""}"><span>${room.spectator ? "الإجابات من الجوالات" : answered ? "تم تسجيل إجابتك ✓" : bluff ? "وين الإجابة الصحيحة بين الخدع؟" : "اختر إجابة واحدة"}</span>
     <span class="muted">${progress}</span></p>`;
 }

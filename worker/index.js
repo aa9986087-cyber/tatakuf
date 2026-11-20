@@ -323,6 +323,8 @@ function viewRoom(room, player, revision, now = Date.now()) {
     answeredCount: Object.keys(room.phase === "write" ? room.fakes : room.answers).length,
     yourAnswer: answered && room.phase !== "finale" && room.phase !== "write" ? room.answers[player.id] : null,
     ...(room.phase === "write" ? { yourFake: room.fakes[player.id] ?? null } : {}),
+    // Who has already answered (never what), so the stage can show who is still thinking.
+    ...(["question", "write", "vote"].includes(room.phase) ? { answeredIds: Object.keys(room.phase === "write" ? room.fakes : room.answers) } : {}),
     question, seenQuestions: room.used,
     ...(room.phase === "finished" && room.question ? { lastAnswer: room.question.options[room.question.correctIndex] } : {}),
     ...(mode === "online" ? { chat: room.chat ?? [] } : {})

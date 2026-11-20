@@ -324,6 +324,8 @@ test("bluff rounds collect fakes, score fooled players and hide nothing until th
   assert.equal((await host("/fake", { questionId, text: "" })).status, 400);
   const fake = (await host("/fake", { questionId, text: "خدعة ناصر" })).data.room;
   assert.equal(fake.yourFake, "خدعة ناصر");
+  assert.deepEqual(fake.answeredIds, [fake.playerId]);
+  assert.equal((await guest()).data.room.answeredIds.length, 1);
   assert.equal(fake.answeredCount, 1);
   assert.equal((await guest()).data.room.yourFake, null);
   await guest("/fake", { questionId, text: "خدعة  ناصر!" });
