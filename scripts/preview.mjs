@@ -38,7 +38,7 @@ export async function buildPreview() {
   appCode = replaceAll(appCode, "window.location.assign(", "previewGo(");
   appCode = replaceOnce(appCode, "new URL(`/room/${room.code}`, window.location.origin).href", "previewRoomLink(room.code)");
   appCode = replaceOnce(appCode, '"/hero.webp?v=6"', '"${previewHero}"');
-  appCode = replaceOnce(appCode, '"/logo.svg?v=1"', '"${previewLogo}"');
+  appCode = replaceOnce(appCode, '"/logo.svg?v=2"', '"${previewLogo}"');
   appCode = replaceAll(appCode, "/questions/${e(item.image.file)}", "${previewImages[item.image.file] ?? \"\"}");
   appCode = replaceOnce(appCode, "/questions/${e(image.file)}", "${previewImages[image.file] ?? \"\"}");
 
@@ -48,7 +48,7 @@ export async function buildPreview() {
   const workerCode = replaceOnce(worker, "export default {", "return {");
   const logoUri = async (file) => "data:image/svg+xml;base64," + (await readFile(`ui/${file}`)).toString("base64");
   const body = html.slice(html.indexOf("<body>") + 6, html.indexOf("</body>"))
-    .replace("/logo-mark.svg?v=1", await logoUri("logo-mark.svg")).replace("/logo.svg?v=1", await logoUri("logo.svg"));
+    .replace("/logo-mark.svg?v=2", await logoUri("logo-mark.svg"));
 
   // The page is embedded in a host skeleton without the original <html lang="ar" dir="rtl">, so set it first.
   const page = `<title>لعبة التكاتف</title>

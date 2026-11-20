@@ -1,25 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="شعار لعبة التكاتف">
-  <defs>
-    <linearGradient id="e-gold" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#fff0bd"/><stop offset=".45" stop-color="#f6c75a"/><stop offset="1" stop-color="#c98a1f"/>
-    </linearGradient>
-    <radialGradient id="e-navy" cx=".5" cy=".35" r=".75">
-      <stop offset="0" stop-color="#2a3b7c"/><stop offset=".7" stop-color="#121a40"/><stop offset="1" stop-color="#0b1230"/>
-    </radialGradient>
-  </defs>
-  <g>
-    <g fill="url(#e-navy)" stroke="url(#e-gold)" stroke-width="6.21" stroke-linejoin="round"><rect x="44.10" y="44.10" width="151.80" height="151.80" rx="12.42" transform="rotate(0 120 120)"/><rect x="44.10" y="44.10" width="151.80" height="151.80" rx="12.42" transform="rotate(45 120 120)"/></g>
-    <g fill="none" stroke="url(#e-gold)" stroke-width="1.66" opacity=".55">
-      <rect x="56.52" y="56.52" width="126.96" height="126.96" rx="8.28"/>
-      <rect x="56.52" y="56.52" width="126.96" height="126.96" rx="8.28" transform="rotate(45 120 120)"/>
-    </g>
-    <circle cx="120" cy="120" r="69.00" fill="none" stroke="#3dd6c6" stroke-width="1.66" opacity=".45"/>
-    <g stroke="url(#e-gold)" stroke-width="20.70" stroke-linecap="round" fill="none">
-      <path d="M84.06 91.02 L120.00 155.94"/>
-      <path d="M155.94 91.02 L120.00 155.94"/>
-    </g>
-    <circle cx="73.63" cy="66.68" r="13.11" fill="url(#e-gold)"/>
-    <circle cx="166.37" cy="66.68" r="13.11" fill="url(#e-gold)"/>
-    <path d="M120 95.66 l9.66 9.66 l-9.66 9.66 l-9.66 -9.66z" fill="#3dd6c6"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 280" role="img" aria-label="شعار">
+<defs><linearGradient id="a-gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0bd"/><stop offset=".5" stop-color="#f2c15a"/><stop offset="1" stop-color="#c98a1f"/></linearGradient>
+    <linearGradient id="a-in" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#25336e"/><stop offset="1" stop-color="#0d1434"/></linearGradient></defs><g transform="translate(-140.0 2)"><path d="M155.0 268.0 V123.0 C155.0 58.0 226.4 33.0 260.0 18.0 C293.6 33.0 365.0 58.0 365.0 123.0 V268.0 Z" fill="url(#a-in)" stroke="url(#a-gold)" stroke-width="9" stroke-linejoin="round"/>
+    <path d="M176.0 256.0 V133.0 C176.0 77.9 233.1 56.7 260.0 44.0 C286.9 56.7 344.0 77.9 344.0 133.0 V256.0 Z" fill="none" stroke="#f2c15a" stroke-width="2" opacity=".55"/>
+    <g stroke="url(#a-gold)" stroke-width="22.50" stroke-linecap="round" fill="none">
+      <path d="M220.94 136.50 L260.00 207.06"/><path d="M299.06 136.50 L260.00 207.06"/></g>
+    <circle cx="209.60" cy="108.15" r="14.25" fill="url(#a-gold)"/><circle cx="310.40" cy="108.15" r="14.25" fill="url(#a-gold)"/>
+    <path d="M260.0 139.65 l9.75 9.75 l-9.75 9.75 l-9.75 -9.75z" fill="#3dd6c6"/></g>
 </svg>

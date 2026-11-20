@@ -142,7 +142,7 @@ function showHome() {
         </button>`).join("")}</div>
     </section>
     <section class="home-signature" aria-label="التوقيع">
-      <img src="/logo.svg?v=1" width="520" height="511" alt="الرافعية × Vamos">
+      <img src="/logo.svg?v=2" width="520" height="494" alt="الرافعية × Vamos">
       <p>صُمّمت في <strong>الرافعية</strong> على يد <bdi>Vamos</bdi></p>
     </section>`;
 }
