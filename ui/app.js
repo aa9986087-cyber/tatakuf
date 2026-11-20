@@ -129,7 +129,7 @@ function showHome() {
         <p class="hero-kicker">${format(Object.values(bankCounts).reduce((total, count) => total + count, 0))} سؤال في ${format(Object.keys(categories).filter((id) => bankCounts[id]).length)} فئات</p>
         <h1 id="home-title">لعبة <strong>التكاتف</strong></h1>
         <p class="lead">جمع ربعك على سؤال واحد. اختاروا الفئة وشوفوا من يجيبها.</p>
-        ${actionButton("انضم برمز الغرفة", "join", "outline")}
+        <button type="button" class="join-chip" data-action="join"><span aria-hidden="true">#</span>عندك رمز غرفة؟ انضم</button>
       </div>
       <div class="hero-art" aria-hidden="true"><img src="/hero.webp?v=6" width="900" height="600" alt="" fetchpriority="high"></div>
     </section>
@@ -236,12 +236,17 @@ function showJoinPage(error = "") {
   void api(`/api/rooms/${roomCode}/invite`).then(({ mode }) => {
     const label = app.querySelector("[data-join-mode]");
     if (label && mode === "screen") label.textContent = "دخلت تحدّي المجلس. الأسئلة على الشاشة والإجابات من جوالك.";
-  }).catch(() => {});
+  }).catch((failure) => {
+    // A wrong or expired code: say so before anyone types a name.
+    if (failure.status === 404 && app.querySelector('[data-form="join-link"]')) {
+      showStatus("ما لقينا غرفة بهذا الرمز. تأكد من الرمز أو اطلب رابط جديد من المضيف.", false, false);
+    }
+  });
 }
 
-function showStatus(message, loading = false) {
+function showStatus(message, loading = false, retry = true) {
   app.innerHTML = `<section class="game panel stage-in"><h1>لعبة التكاتف</h1><p>${e(message)}</p>
-    ${loading ? "" : `<div class="actions">${actionButton("إعادة المحاولة", "retry")}<a class="btn outline" href="/">الرئيسية</a></div>`}</section>`;
+    ${loading ? "" : `<div class="actions">${retry ? actionButton("إعادة المحاولة", "retry") : ""}<a class="btn ${retry ? "outline" : "primary"}" href="/">الرئيسية</a></div>`}</section>`;
 }
 
 function playersList(order, showScore, showRank = false, compact = false) {
@@ -736,10 +741,19 @@ function renderRoom(next, force = false) {
       playPhaseSound(previous);
       if (previous) stinger();
       animateLeaderboard();
-      if (room.phase === "finished") confetti();
+      if (room.phase === "finished") {
+        confetti();
+        // After the champion moment, glide down to the full standings when the list is long.
+        setTimeout(() => {
+          const board = app.querySelector(".leaderboard");
+          if (!board || reducedMotion.matches || scrollY > 40 || board.getBoundingClientRect().bottom <= innerHeight) return;
+          board.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 4000);
+      }
     } else if (revealSwitch) {
       animateLeaderboard();
       playSound("select");
+      autoScrollResults();
     } else if (focus) {
       [...body.querySelectorAll("button[data-action]")].find((button) => !button.disabled &&
         button.dataset.action === focus && button.dataset.category === active.dataset.category &&
@@ -810,6 +824,31 @@ function stinger() {
 }
 
 // Rows slide from their previous rank and scores count up to the new total.
+// With many players the leaderboard is taller than the screen: glide down to the last rows on its own,
+// and stop as soon as someone touches or scrolls.
+function autoScrollResults() {
+  const screen = document.querySelector("body > .results-screen:not(.leaving)");
+  if (!screen || reducedMotion.matches) return;
+  const remaining = Math.max(0, (room.deadline ?? 0) - (Date.now() + clockOffset));
+  const travel = () => screen.scrollHeight - screen.clientHeight;
+  let stopped = false;
+  const stop = () => { stopped = true; };
+  for (const type of ["wheel", "touchstart", "pointerdown", "keydown"]) screen.addEventListener(type, stop, { once: true, passive: true });
+  setTimeout(() => {
+    if (stopped || travel() < 8 || !screen.isConnected) return;
+    const duration = Math.max(1200, remaining - 2600);
+    const startedAt = performance.now();
+    const step = (time) => {
+      if (stopped || !screen.isConnected) return;
+      const progress = Math.min(1, (time - startedAt) / duration);
+      const eased = progress < .5 ? 2 * progress * progress : 1 - (-2 * progress + 2) ** 2 / 2;
+      screen.scrollTop = travel() * eased;
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, 1300);
+}
+
 // The visible stage: the open results screen when there is one, otherwise the game itself.
 const stageRoot = () => document.querySelector("body > .results-screen:not(.leaving)") ?? app;
 
