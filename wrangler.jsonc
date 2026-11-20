@@ -1,0 +1,21 @@
+// Cloudflare Workers + D1 (free plan). The worker serves the UI and the API from one bundle.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tatakuf",
+  "main": "dist/server/index.js",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  // `wrangler deploy` and `wrangler dev` run the build first.
+  "build": { "command": "npm run build", "watch_dir": ["ui", "worker", "scripts"] },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tatakuf",
+      // Leave database_id out: Wrangler creates the database on the first deploy and keeps it linked.
+      // To use a database you created yourself, add "database_id": "<id from wrangler d1 create>".
+      "migrations_dir": "drizzle"
+    }
+  ],
+  "observability": { "enabled": true }
+}
