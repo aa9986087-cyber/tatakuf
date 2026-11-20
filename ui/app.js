@@ -459,6 +459,7 @@ function finished() {
 }
 
 function createRoomShell() {
+  queueMicrotask(() => { const fab = app.querySelector(".chat-fab"); if (fab) setupFab(fab); });
   const online = room.mode === "online";
   app.innerHTML = `<section class="game mode-${room.mode}" ${room.display ? "data-display" : ""}>
     <div class="game-head"><div><p class="mode-chip">${modes[room.mode].title}</p><h1 tabindex="-1" id="game-title"></h1><p id="round-label" class="muted"></p></div>
@@ -485,6 +486,82 @@ function createRoomShell() {
 
 let chatOpen = false;
 let chatSeen;
+const fabKey = "tatakuf-chat-position";
+
+// The chat bubble can be dragged anywhere; on release it snaps to the nearest side and remembers the spot.
+function placeFab(fab, x, y) {
+  const size = fab.offsetWidth || 50;
+  const left = Math.min(innerWidth - size - 10, Math.max(10, x));
+  const top = Math.min(innerHeight - size - 10, Math.max(10, y));
+  fab.classList.add("placed");
+  fab.style.left = `${left}px`;
+  fab.style.top = `${top}px`;
+}
+
+function setupFab(fab) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(fabKey));
+    if (saved) placeFab(fab, saved.x * innerWidth, saved.y * innerHeight);
+  } catch { /* Default corner. */ }
+  let start = null;
+  let moved = false;
+  fab.addEventListener("pointerdown", (event) => {
+    start = { x: event.clientX, y: event.clientY, rect: fab.getBoundingClientRect() };
+    moved = false;
+    fab.setPointerCapture(event.pointerId);
+  });
+  fab.addEventListener("pointermove", (event) => {
+    if (!start) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (!moved && Math.hypot(dx, dy) < 8) return;
+    moved = true;
+    fab.classList.add("dragging");
+    placeFab(fab, start.rect.left + dx, start.rect.top + dy);
+    if (chatOpen) positionDrawer();
+  });
+  const finish = () => {
+    if (!start) return;
+    start = null;
+    if (!moved) return;
+    fab.classList.remove("dragging");
+    fab.dataset.dragged = "1";
+    setTimeout(() => delete fab.dataset.dragged, 80);
+    const rect = fab.getBoundingClientRect();
+    const x = rect.left + rect.width / 2 < innerWidth / 2 ? 10 : innerWidth - rect.width - 10;
+    placeFab(fab, x, rect.top);
+    try { localStorage.setItem(fabKey, JSON.stringify({ x: x / innerWidth, y: rect.top / innerHeight })); } catch { /* Not remembered. */ }
+    if (chatOpen) setTimeout(positionDrawer, 320);
+  };
+  fab.addEventListener("pointerup", finish);
+  fab.addEventListener("pointercancel", finish);
+  addEventListener("resize", () => {
+    if (!fab.classList.contains("placed")) return;
+    const rect = fab.getBoundingClientRect();
+    placeFab(fab, rect.left, rect.top);
+    if (chatOpen) positionDrawer();
+  });
+}
+
+// Open the chat window on the roomier side of the bubble.
+function positionDrawer() {
+  const drawer = app.querySelector(".chat-drawer");
+  const fab = app.querySelector(".chat-fab");
+  if (!drawer || drawer.hidden || !fab.classList.contains("placed")) return;
+  const rect = fab.getBoundingClientRect();
+  const width = Math.min(370, innerWidth - 20);
+  drawer.classList.add("placed");
+  drawer.style.width = `${width}px`;
+  drawer.style.left = `${Math.min(innerWidth - width - 10, Math.max(10, rect.left + rect.width / 2 - width / 2))}px`;
+  const dock = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--dock-offset")) || 0;
+  const above = rect.top > (innerHeight - dock) / 2;
+  const room = above ? rect.top - 22 : innerHeight - dock - rect.bottom - 22;
+  // Shrink the message list so the whole window fits on the chosen side.
+  const log = drawer.querySelector(".chat-log");
+  log.style.height = `${Math.max(90, Math.min(360, room - (drawer.offsetHeight - log.offsetHeight)))}px`;
+  const height = drawer.offsetHeight;
+  drawer.style.top = `${above ? Math.max(10, rect.top - 12 - height) : rect.bottom + 12}px`;
+}
 
 function toggleChat(open = !chatOpen) {
   const drawer = app.querySelector(".chat-drawer");
@@ -495,6 +572,7 @@ function toggleChat(open = !chatOpen) {
   fab.setAttribute("aria-expanded", String(open));
   fab.classList.toggle("open", open);
   if (open) {
+    positionDrawer();
     chatSeen = room.chat?.at(-1)?.id;
     updateChatBadge();
     const log = drawer.querySelector(".chat-log");
@@ -877,6 +955,7 @@ document.addEventListener("change", (event) => {
 document.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-action]");
   if (!button) return;
+  if (button.dataset.dragged) return;
   const action = button.dataset.action;
   if (action === "sound") {
     toggleSound(); updateSoundButton(); playSound("tap");

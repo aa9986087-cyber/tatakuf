@@ -280,7 +280,7 @@ legend { font-weight: 800; margin-bottom: 9px; }
   .nav-actions { gap: 5px; }
   .check-grid { grid-template-columns: 1fr 1fr; }
   .check-category:last-child:nth-child(odd) { grid-column: 1 / -1; }
-  .options { grid-template-columns: 1fr; }
+  .options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .room-invite.with-qr { grid-template-columns: 1fr; justify-items: center; text-align: center; }
   .room-invite.with-qr .actions { justify-content: center; }
   .category { min-height: 73px; padding: 7px; font-size: 14px; }
@@ -609,3 +609,38 @@ button { color: inherit; }
 html.results-open, html.results-open body { overflow: hidden; }
 [data-display] .results-inner { width: min(1000px, 100%); }
 .results-screen:not(.entering) .rank-row { animation: none; }
+
+/* Always dark: hosts or phones in light mode must never turn system-coloured text black */
+html, :root, :root[data-theme], :root[data-theme="light"] { color-scheme: dark !important; }
+html, body { color: var(--ink); background-color: var(--bg); }
+dialog, input, textarea, select, option, legend, label, fieldset, p, li, h1, h2, h3, small, strong, bdi { color: inherit; }
+dialog { color: var(--ink); }
+input, textarea, select { color: var(--ink); -webkit-text-fill-color: var(--ink); }
+input::placeholder { -webkit-text-fill-color: #8d97b8; color: #8d97b8; }
+
+/* Balanced answer options: compact two-by-two grid, equal heights per row */
+.option { min-height: 54px; padding: 10px 12px; font-size: 16px; line-height: 1.45; gap: 8px; border-radius: 14px; }
+.option-mark { width: 26px; height: 26px; border-radius: 7px; font-size: 14px; }
+.options { gap: 10px; align-items: stretch; }
+[data-display] .option { min-height: 76px; padding: 14px 18px; }
+[data-display] .option-mark { width: 38px; height: 38px; font-size: 22px; }
+@media (max-width: 420px) {
+  .option { font-size: 15px; padding: 9px 10px; min-height: 52px; }
+}
+
+/* Smaller, draggable chat bubble */
+.chat-fab { width: 50px; height: 50px; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+.chat-fab svg { width: 23px; height: 23px; }
+.chat-fab.dragging { animation: none; cursor: grabbing; transform: scale(1.1); box-shadow: 0 16px 40px #000000a0, 0 0 0 6px #f8d58133; transition: none; }
+.chat-fab.placed { inset: auto; }
+.chat-badge { min-width: 21px; height: 21px; font-size: 12px; }
+@keyframes fab-float { 50% { transform: translateY(-3px); } }
+.chat-drawer.placed { inset: auto; }
+.chat-fab.placed:not(.dragging) { transition: left .32s cubic-bezier(.3,1.4,.5,1), top .32s cubic-bezier(.3,1.4,.5,1), transform .25s; }
+.chat-drawer.placed { right: auto; bottom: auto; }
+.chat-fab.placed { right: auto; bottom: auto; }
+.symbol { background: var(--category, var(--gold)); color: #1b1f2e; -webkit-text-fill-color: #1b1f2e; }
+.category:disabled .symbol { -webkit-text-fill-color: #1b1f2e; color: #1b1f2e; }
+.cat-general { --category: #f8d581; }
+.check-category .symbol { -webkit-text-fill-color: var(--muted); }
+.check-category:has(input:checked) .symbol { -webkit-text-fill-color: #1b1f2e; }
