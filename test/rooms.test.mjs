@@ -243,7 +243,7 @@ test("a legacy display-only screen room seats its host with the same link and to
   const revealed = (await request(path + "/answer", { questionId: question.id, option: 0 }, phone.data.token)).data.room;
   assert.equal(revealed.phase, "reveal");
 
-  const full = await legacyRoom(Array.from({ length: 8 }, (_, index) => ({
+  const full = await legacyRoom(Array.from({ length: 15 }, (_, index) => ({
     id: crypto.randomUUID(), token: crypto.randomUUID(), name: `لاعب ${index + 1}`, score: 0
   })));
   assert.equal((await request(full.path + "/join", { name: "سعد" }, full.token)).status, 409);
@@ -409,4 +409,14 @@ test("the logo files are served as sandboxed SVG", async () => {
   }
   const page = await (await worker.fetch(new Request("https://quiz.example/"), {})).text();
   assert.match(page, /rel="icon"[^>]+logo-mark\.svg/);
+});
+
+test("a room takes up to fifteen players", async (t) => {
+  const { request, path } = await setup(t);
+  for (let index = 3; index <= 15; index += 1) {
+    assert.equal((await request(path + "/join", { name: `لاعب ${index}` })).status, 200);
+  }
+  const full = await request(path + "/join", { name: "لاعب ١٦" });
+  assert.equal(full.status, 409);
+  assert.equal(full.data.error, "الغرفة ممتلئة.");
 });

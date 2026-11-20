@@ -1,7 +1,7 @@
 const codeAlphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 const day = 86_400_000;
 const categoryTime = 15_000;
-const maxPlayers = 8;
+const maxPlayers = 15;
 // The reveal shows the coloured answers with names first, then the leaderboard.
 const revealTime = 8_000;
 const bluffRevealTime = 11_000;

@@ -619,7 +619,8 @@ html.results-open, html.results-open body { overflow: hidden; }
 
 /* Always dark: hosts or phones in light mode must never turn system-coloured text black */
 html, :root, :root[data-theme], :root[data-theme="light"] { color-scheme: dark !important; }
-html, body { color: var(--ink); background-color: var(--bg); }
+html { color: var(--ink); background-color: var(--bg); }
+body { color: var(--ink); background-color: transparent; }
 dialog, input, textarea, select, option, legend, label, fieldset, p, li, h1, h2, h3, small, strong, bdi { color: inherit; }
 dialog { color: var(--ink); }
 input, textarea, select { color: var(--ink); -webkit-text-fill-color: var(--ink); }
@@ -699,3 +700,114 @@ input::placeholder { -webkit-text-fill-color: #8d97b8; color: #8d97b8; }
 .results-timer { display: grid; gap: 6px; }
 .results-timer p { margin: 0; text-align: center; }
 .results-timer .timer-row { margin: 0; }
+
+/* Grids everywhere except the leaderboard, however many players join (up to 15) */
+.players, .players.compact { grid-template-columns: repeat(auto-fill, minmax(min(150px, 44%), 1fr)); }
+.options.many { grid-template-columns: repeat(auto-fill, minmax(min(160px, 44%), 1fr)); }
+@media (max-width: 600px) { .players.compact { grid-template-columns: repeat(auto-fill, minmax(min(150px, 44%), 1fr)); } }
+.player { animation: chip-pop .45s cubic-bezier(.3,1.5,.5,1) both; }
+.game-main.settled .player { animation: none; }
+@keyframes chip-pop { from { opacity: 0; transform: scale(.85); } }
+
+/* ===== Colour and life ===== */
+/* A slow aurora behind everything */
+body::before {
+  content: ""; position: fixed; inset: -25%; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(32% 28% at 14% 18%, #3dd6c63d, transparent 70%),
+    radial-gradient(30% 26% at 86% 12%, #8b6cf63a, transparent 70%),
+    radial-gradient(38% 34% at 72% 86%, #f6bd582e, transparent 70%),
+    radial-gradient(30% 28% at 18% 88%, #ff6b8a2a, transparent 70%);
+  animation: aurora 26s ease-in-out infinite alternate;
+}
+@keyframes aurora {
+  50% { transform: translate(4%, -3%) rotate(7deg) scale(1.06); }
+  100% { transform: translate(-4%, 3%) rotate(-5deg) scale(1.1); }
+}
+
+/* Each answer has its own colour: gold, turquoise, coral, violet */
+.options > :nth-child(4n+1) { --opt: #f6c75a; }
+.options > :nth-child(4n+2) { --opt: #3dd6c6; }
+.options > :nth-child(4n+3) { --opt: #ff7a8a; }
+.options > :nth-child(4n+4) { --opt: #a78bfa; }
+.option {
+  border-color: color-mix(in srgb, var(--opt, #29324e) 40%, #29324e);
+  background: linear-gradient(150deg, color-mix(in srgb, var(--opt, #10172d) 16%, #10172d), #10172d 72%);
+}
+.option .option-mark { background: var(--opt, #2a4031); color: #10162a; -webkit-text-fill-color: #10162a; font-weight: 900; }
+.option:enabled:hover { border-color: var(--opt); box-shadow: 0 12px 30px -8px color-mix(in srgb, var(--opt) 55%, transparent); }
+.option:enabled:active { transform: scale(.97); }
+.option.selected { border-color: var(--gold); background: linear-gradient(150deg, #4a3d1c, #1d1a22); animation: pick-pop .4s cubic-bezier(.3,1.6,.5,1); }
+@keyframes pick-pop { 40% { transform: scale(1.04); } }
+
+/* Categories glow in their colour */
+.category {
+  border-color: color-mix(in srgb, var(--category) 45%, #29324e);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--category) 24%, #11182e), #0f1528 78%);
+  transition: transform .2s, box-shadow .25s, border-color .2s;
+}
+.category:enabled:hover { box-shadow: 0 14px 34px -10px color-mix(in srgb, var(--category) 65%, transparent); border-color: var(--category); }
+.category:enabled:active { transform: scale(.96); }
+.category .symbol { box-shadow: 0 6px 18px -4px color-mix(in srgb, var(--category) 70%, transparent); }
+
+/* The question card carries its category's colour */
+.question-card {
+  position: relative; overflow: hidden;
+  border-color: color-mix(in srgb, var(--category, var(--gold)) 50%, #29324e);
+  background: radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--category, var(--gold)) 22%, transparent), transparent 70%), linear-gradient(180deg, #151d3a, #0f1529);
+  box-shadow: 0 22px 60px -28px color-mix(in srgb, var(--category, var(--gold)) 70%, transparent);
+}
+.question-card::before {
+  content: ""; position: absolute; inset: 0 0 auto; height: 4px;
+  background: linear-gradient(90deg, transparent, var(--category, var(--gold)), transparent);
+  animation: card-scan 3.5s ease-in-out infinite;
+}
+@keyframes card-scan { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+
+/* Colourful countdown */
+.timer-fill { background: linear-gradient(90deg, #ff7a8a, #f6c75a 45%, #3dd6c6); }
+.timer-track { background: #232b47; }
+
+/* Primary buttons catch the light */
+.btn.primary { position: relative; overflow: hidden; isolation: isolate; }
+.btn.primary::after {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, #ffffff8c 50%, transparent 65%);
+  transform: translateX(-130%); animation: shine 3.4s ease-in-out infinite;
+}
+@keyframes shine { 0%, 55% { transform: translateX(-130%); } 100% { transform: translateX(130%); } }
+.btn.primary:not(:disabled):hover { box-shadow: 0 12px 30px -8px #f6bd58aa; transform: translateY(-1px); }
+
+/* Mode cards and panels get depth */
+.mode-card { background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 16%, #121a33), #0e1428 70%); }
+.mode-card:hover { box-shadow: 0 18px 40px -12px color-mix(in srgb, var(--accent) 55%, transparent); }
+.mode-icon { box-shadow: 0 10px 26px -6px color-mix(in srgb, var(--accent) 70%, transparent); animation: icon-bob 4s ease-in-out infinite; }
+.mode-card:nth-child(2) .mode-icon { animation-delay: -1.3s; }
+.mode-card:nth-child(3) .mode-icon { animation-delay: -2.6s; }
+@keyframes icon-bob { 50% { transform: translateY(-4px) rotate(-3deg); } }
+.panel { background: linear-gradient(180deg, #121a33, #0d1326); }
+.hero-kicker { animation: kicker-glow 3s ease-in-out infinite; }
+@keyframes kicker-glow { 50% { text-shadow: 0 0 18px #f6bd5899; } }
+.hero h1 strong { background: linear-gradient(90deg, #ffe39a, #f6bd58, #ff9f7a, #f6bd58, #ffe39a); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: gold-flow 6s linear infinite; }
+@keyframes gold-flow { to { background-position: -200% 0; } }
+.score-strip li { background: linear-gradient(150deg, #1a2346, #111833); }
+.option { position: relative; }
+.own-tag { position: absolute; top: 6px; inset-inline-end: 10px; margin: 0; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: #0b1230; }
+body::before {
+  background:
+    radial-gradient(32% 28% at 14% 18%, #3dd6c659, transparent 70%),
+    radial-gradient(30% 26% at 86% 12%, #8b6cf659, transparent 70%),
+    radial-gradient(38% 34% at 72% 86%, #f6bd5840, transparent 70%),
+    radial-gradient(30% 28% at 18% 88%, #ff6b8a40, transparent 70%);
+}
+/* Faint twinkling stars */
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .55;
+  background:
+    radial-gradient(1.5px 1.5px at 12% 22%, #fff8, transparent 60%), radial-gradient(1px 1px at 32% 68%, #fff7, transparent 60%),
+    radial-gradient(1.5px 1.5px at 58% 14%, #ffe39a99, transparent 60%), radial-gradient(1px 1px at 78% 44%, #fff7, transparent 60%),
+    radial-gradient(1.5px 1.5px at 88% 78%, #9be5dd99, transparent 60%), radial-gradient(1px 1px at 44% 88%, #fff6, transparent 60%),
+    radial-gradient(1px 1px at 6% 56%, #fff6, transparent 60%), radial-gradient(1.5px 1.5px at 66% 62%, #fff5, transparent 60%);
+  animation: twinkle 5s ease-in-out infinite alternate;
+}
+@keyframes twinkle { to { opacity: .2; } }

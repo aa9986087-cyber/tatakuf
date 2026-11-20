@@ -304,7 +304,7 @@ function lobby() {
     </div>
     ${room.display ? `<figure class="qr-block"><canvas data-room-qr aria-label="رمز QR للانضمام"></canvas><figcaption>${e(room.code)}</figcaption></figure>` : ""}
   </section>
-  <section class="panel"><h2>اللاعبون <span class="muted">(${format(count)}/٨)</span></h2>
+  <section class="panel"><h2>اللاعبون <span class="muted">(${format(count)}/١٥)</span></h2>
     <div class="settings-line"><span>${formats[settings.format ?? "classic"].title}</span><span>${format(settings.rounds)} جولات</span><span>${format(settings.seconds)} ثانية للسؤال</span>
       ${room.mode === "bots" ? `<span>${{ easy:"سهل", normal:"متوسط", hard:"صعب" }[settings.difficulty]}</span>` : ""}</div>
     ${count ? playersList(room.players, false, false, room.display) : `<p class="muted">بانتظار أول لاعب.</p>`}
@@ -346,7 +346,7 @@ function selection() {
     <div class="category-grid">${room.available.map((id) => `<button type="button" class="category cat-${id}" data-action="category"
       data-category="${id}" ${!isTurn || pending ? "disabled" : ""}>
       <span class="symbol" aria-hidden="true">${categories[id].icon}</span>${categories[id].title}</button>`).join("")}</div>
-  </section>${scores()}`;
+  </section>`;
 }
 
 // A slim, scrollable row of scores keeps the stage clear between questions.
@@ -360,7 +360,7 @@ function scores() {
 function questionCard(item, hint = "شوف السؤال على الشاشة") {
   const words = item.prompt ? item.prompt.split(/\s+/u).map((word, index) =>
     `<span class="word" style="--i:${index}">${e(word)}</span>`).join(" ") : e(hint);
-  return `<section class="panel question-card">
+  return `<section class="panel question-card cat-${item.category}">
     ${timer()}
     <p class="eyebrow cat-${item.category}"><span class="pick-dot" aria-hidden="true"></span>${categories[item.category].title}
       <span class="picked-by">· ${pickedLabel(item)}</span></p>
