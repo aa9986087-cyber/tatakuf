@@ -43,6 +43,21 @@ const letters = ["أ", "ب", "ج", "د", "هـ", "و", "ز", "ح", "ط"];
 let room;
 let token = roomCode ? sessionStorage.getItem(storageKey) : null;
 let clockOffset = 0;
+let clockRtt = Infinity;
+let clockAt = 0;
+
+// Server time minus local time, taken from the response with the shortest round trip; a slow reply
+// no longer drags the countdown around. Older samples expire after 20 seconds.
+function syncClock(next) {
+  const timing = next.__timing;
+  if (!timing) { if (clockRtt === Infinity) clockOffset = next.now - Date.now(); return; }
+  const rtt = timing.received - timing.sent;
+  if (rtt <= clockRtt * 1.25 || Date.now() - clockAt > 20000) {
+    clockOffset = next.now - (timing.sent + timing.received) / 2;
+    clockRtt = rtt;
+    clockAt = Date.now();
+  }
+}
 let pending = false;
 let reading = false;
 let toastTimeout;
@@ -125,6 +140,10 @@ function showHome() {
           <span class="mode-icon" aria-hidden="true"></span><strong>${mode.title}</strong>
           <span>${mode.description}</span><span class="mode-detail">${mode.choice}</span>
         </button>`).join("")}</div>
+    </section>
+    <section class="home-signature" aria-label="التوقيع">
+      <img src="/logo.svg?v=1" width="520" height="511" alt="الرافعية × Vamos">
+      <p>صُمّمت في <strong>الرافعية</strong> على يد <bdi>Vamos</bdi></p>
     </section>`;
 }
 
@@ -293,9 +312,20 @@ function lobby() {
   </section>`;
 }
 
+function phaseDuration() {
+  const chooser = room.players.find((player) => player.id === room.chooserId);
+  return room.phase === "finale" ? 5500 : room.phase === "reveal" ? (room.settings.format === "bluff" ? 9000 : 5000)
+    : room.phase === "select" ? (chooser?.bot ? 2200 : 15000)
+    : room.phase === "write" ? room.settings.seconds * 1000 + 15000 : room.settings.seconds * 1000;
+}
+
+// The bar is one continuous CSS animation from where the clock is now down to zero, so re-rendering
+// the stage (someone answered, a chat arrived) never makes it jump.
 function timer() {
+  const remaining = Math.max(0, (room.deadline ?? 0) - (Date.now() + clockOffset));
+  const from = Math.min(1, remaining / phaseDuration());
   return `<div class="timer-row"><span class="timer-value" data-timer></span>
-    <div class="timer-track" aria-hidden="true"><span class="timer-fill"></span></div></div>`;
+    <div class="timer-track" aria-hidden="true"><span class="timer-fill" style="--from:${from.toFixed(4)};--remaining:${Math.round(remaining)}ms"></span></div></div>`;
 }
 
 function selection() {
@@ -633,13 +663,13 @@ function renderRoom(next, force = false) {
   const phaseChanged = !previous || previous.phase !== next.phase || previous.round !== next.round;
   room = next;
   rememberQuestions(next.seenQuestions);
-  clockOffset = room.now - Date.now();
+  syncClock(next);
   if (!app.querySelector(".game-main")) {
     stageKey = chatKey = undefined;
     createRoomShell();
   }
   const body = app.querySelector(".game-main");
-  const { now, chat, revision, seenQuestions: history, ...stageState } = room;
+  const { now, chat, revision, seenQuestions: history, __timing, ...stageState } = room;
   const key = JSON.stringify(stageState);
   if (stageKey !== key || force) {
     stageKey = key;
@@ -721,15 +751,10 @@ function updateTimer() {
   if (!label || !fill) return;
   const remaining = Math.max(0, room.deadline - (Date.now() + clockOffset));
   const seconds = Math.ceil(remaining / 1000);
-  const chooser = room.players.find((player) => player.id === room.chooserId);
-  const duration = room.phase === "finale" ? 5500 : room.phase === "reveal" ? (room.settings.format === "bluff" ? 9000 : 5000)
-    : room.phase === "select" ? (chooser?.bot ? 2200 : 15000)
-    : room.phase === "write" ? room.settings.seconds * 1000 + 15000 : room.settings.seconds * 1000;
   const text = `${format(seconds)} ثانية`;
   if (label.textContent !== text) label.textContent = text;
-  fill.style.width = `${Math.min(100, remaining / duration * 100)}%`;
   const answering = ["question", "write", "vote"].includes(room.phase);
-  fill.classList.toggle("late", answering && seconds <= 3);
+  fill.closest(".timer-row").classList.toggle("late", answering && seconds <= 3);
   if (answering && seconds >= 1 && seconds <= 3 && lastTick !== seconds && room.yourAnswer === null && !room.yourFake) {
     lastTick = seconds;
     playSound("tick");
@@ -852,9 +877,11 @@ async function api(path, body) {
   const headers = {};
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
+  const sent = Date.now();
   const response = await fetch(path, { method: body === undefined ? "GET" : "POST", headers, signal: AbortSignal.timeout(10000),
     ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   const data = await response.json().catch(() => ({}));
+  if (data.room) Object.defineProperty(data.room, "__timing", { value: { sent, received: Date.now() }, enumerable: false });
   if (!response.ok) throw Object.assign(new Error(data.error ?? "تعذّر الاتصال. جرّب مرة ثانية."), { status: response.status });
   return data;
 }

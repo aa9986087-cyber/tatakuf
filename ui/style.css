@@ -196,8 +196,14 @@ legend { font-weight: 800; margin-bottom: 9px; }
 .timer-row { display: flex; min-width: 0; align-items: center; gap: 10px; margin-bottom: 20px; }
 .timer-value { color: var(--gold); font-weight: 850; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .timer-track { flex: 1; height: 8px; border-radius: 20px; background: #2c3554; overflow: hidden; }
-.timer-fill { display: block; height: 100%; width: 100%; border-radius: inherit; background: linear-gradient(90deg, #f7d683, #9be5dd); transition: width .25s linear; }
-.timer-fill.late { background: #fa9d89; }
+.timer-fill {
+  display: block; height: 100%; width: 100%; border-radius: inherit; background: linear-gradient(90deg, #f7d683, #9be5dd);
+  transform-origin: 100% 50%; transform: scaleX(var(--from, 1)); will-change: transform;
+  animation: timer-run var(--remaining, 0ms) linear forwards;
+}
+@keyframes timer-run { from { transform: scaleX(var(--from, 1)); } to { transform: scaleX(0); } }
+.timer-row.late .timer-fill { background: #fa9d89; }
+.timer-row.late .timer-track { animation: timer-pulse .5s ease-in-out infinite alternate; }
 .category-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin-top: 6px; }
 .category {
   --category: #f4d487; display: grid; gap: 7px; align-content: start; justify-items: start; text-align: start; min-height: 88px;
@@ -288,6 +294,7 @@ legend { font-weight: 800; margin-bottom: 9px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  .timer-fill { animation-duration: var(--remaining, 0ms) !important; }
 }
 
 .bank-count { margin: -5px 0 0; font-size: 14px; }
@@ -442,7 +449,7 @@ legend { font-weight: 800; margin-bottom: 9px; }
 .game-main:not(.settled) .category:nth-child(6) { animation-delay: .3s; }
 .game-main:not(.settled) .category:nth-child(7) { animation-delay: .36s; }
 .game-main.settled .rank-row { animation: none; }
-.timer-fill.late { animation: timer-pulse .5s ease-in-out infinite alternate; }
+
 @keyframes timer-pulse { to { filter: brightness(1.35); } }
 
 /* Phase stinger */
@@ -666,3 +673,23 @@ input::placeholder { -webkit-text-fill-color: #8d97b8; color: #8d97b8; }
 .rank-row:first-child .rank-name { font-size: 18px; }
 .rank-row:first-child .rank-score { font-size: 24px; }
 .rank-row:last-child:nth-child(even) { grid-column: 1 / -1; }
+
+/* Signature lives only on the home screen */
+.home-signature {
+  display: grid; justify-items: center; gap: 12px; margin-top: clamp(40px, 7vw, 64px); padding: 34px 16px 30px;
+  text-align: center; border-top: 1px solid var(--line);
+  background: radial-gradient(ellipse at 50% 0%, #1b2756aa, transparent 70%);
+}
+.home-signature img { width: min(220px, 56vw); height: auto; filter: drop-shadow(0 10px 30px #f6bd5826); }
+.home-signature p { margin: 0; color: var(--muted); font-size: 15px; letter-spacing: .01em; }
+.home-signature strong { color: var(--gold); }
+.home-signature bdi { color: var(--jade); font-weight: 800; }
+
+/* Who fooled whom: a card grid like the answer options; the true answer gets the full row */
+.reveal-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.reveal-card.is-correct { grid-column: 1 / -1; }
+.reveal-card:nth-last-child(2):nth-child(odd) { grid-column: 1 / -1; }
+.reveal-inner { height: 100%; align-content: start; padding: 12px 14px; }
+.reveal-card strong { font-size: clamp(17px, 2.4vw, 24px); }
+.reveal-voters { font-size: 13px; line-height: 1.5; }
+.reveal-card.is-correct strong { font-size: clamp(20px, 3vw, 30px); }

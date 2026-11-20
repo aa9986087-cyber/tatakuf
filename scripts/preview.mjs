@@ -38,6 +38,7 @@ export async function buildPreview() {
   appCode = replaceAll(appCode, "window.location.assign(", "previewGo(");
   appCode = replaceOnce(appCode, "new URL(`/room/${room.code}`, window.location.origin).href", "previewRoomLink(room.code)");
   appCode = replaceOnce(appCode, '"/hero.webp?v=6"', '"${previewHero}"');
+  appCode = replaceOnce(appCode, '"/logo.svg?v=1"', '"${previewLogo}"');
   appCode = replaceAll(appCode, "/questions/${e(item.image.file)}", "${previewImages[item.image.file] ?? \"\"}");
   appCode = replaceOnce(appCode, "/questions/${e(image.file)}", "${previewImages[image.file] ?? \"\"}");
 
@@ -69,6 +70,7 @@ ${body}
 </div>
 <script type="module">
 const bankCounts = ${JSON.stringify(counts)};
+const previewLogo = "${await logoUri("logo.svg")}";
 const previewHero = "data:image/webp;base64,${hero.toString("base64")}";
 const previewImages = ${JSON.stringify(images)};
 const roomsKey = "tatakuf-preview-rooms";
