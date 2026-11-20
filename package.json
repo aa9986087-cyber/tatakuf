@@ -10,7 +10,8 @@
     "dev": "node scripts/dev.mjs",
     "test": "node --test",
     "cf:dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "preview": "node scripts/preview.mjs"
   },
   "dependencies": {
     "qrcode-generator": "2.0.4"
