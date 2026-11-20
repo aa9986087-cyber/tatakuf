@@ -7,6 +7,7 @@ import { openLocalDatabase } from "../scripts/dev.mjs";
 await build();
 const { default: worker } = await import("../dist/server/index.js");
 const bank = JSON.parse(await readFile("worker/questions.json", "utf8"));
+const bluffBank = JSON.parse(await readFile("worker/bluff.json", "utf8"));
 
 async function setup(t, seconds = 20) {
   const db = await openLocalDatabase();
@@ -312,7 +313,8 @@ test("bluff rounds collect fakes, score fooled players and hide nothing until th
   assert.equal(writing.question.options, undefined);
   assert.equal(writing.deadline, 100_000 + 35_000);
   const questionId = writing.question.id;
-  const correct = bank.science.find((entry) => entry[0] === writing.question.prompt)[1];
+  assert.match(writing.question.id, /^bluff\.science-\d+$/);
+  const correct = bluffBank.science.find((entry) => entry[0] === writing.question.prompt)[1];
   assert.equal((await host("/answer", { questionId, option: 0 })).status, 409);
   assert.equal((await host("/fake", { questionId, text: ` ${correct} ` })).status, 409);
   assert.equal((await host("/fake", { questionId, text: "" })).status, 400);
@@ -368,4 +370,16 @@ test("bluff bots write fakes and vote on the server clock, and silent rounds sti
   assert.equal(revealed.question.voters.flat().length, 2);
   t.mock.timers.setTime(revealed.deadline + 2_200 + 30_000 + 15_000);
   assert.equal((await solo()).data.room.phase, "reveal");
+});
+
+test("every category has questions in both formats and flag pictures are served as inert SVG", async () => {
+  assert.deepEqual(Object.keys(bluffBank).sort(), Object.keys(bank).sort());
+  for (const items of [...Object.values(bank), ...Object.values(bluffBank)]) assert.ok(items.length >= 10);
+  const flag = bank.flags[0][5];
+  const response = await worker.fetch(new Request(`https://quiz.example/questions/${flag.file}`), {});
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "image/svg+xml");
+  assert.match(response.headers.get("content-security-policy"), /sandbox/);
+  assert.match(await response.text(), /<svg/);
+  assert.equal((await worker.fetch(new Request("https://quiz.example/questions/flag-zz.svg"), {})).status, 404);
 });

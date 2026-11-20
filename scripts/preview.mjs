@@ -13,27 +13,31 @@ const replaceAll = (source, from, to) => {
 };
 
 export async function buildPreview() {
-  const [html, css, app, sound, qr, hero, bank, worker] = await Promise.all([
+  const [html, css, app, sound, qr, hero, bank, bluffBank, worker] = await Promise.all([
     readFile("ui/index.html", "utf8"), readFile("ui/style.css", "utf8"),
     readFile("ui/app.js", "utf8"), readFile("ui/sound.js", "utf8"),
     readFile(new URL(import.meta.resolve("qrcode-generator")), "utf8"),
-    readFile("ui/hero.webp"), readFile("worker/questions.json", "utf8"),
+    readFile("ui/hero.webp"), readFile("worker/questions.json", "utf8"), readFile("worker/bluff.json", "utf8"),
     readFile("worker/index.js", "utf8")
   ]);
   const questions = JSON.parse(bank);
+  const bluffQuestions = JSON.parse(bluffBank);
   const images = {};
-  for (const item of Object.values(questions).flat()) {
+  for (const item of [...Object.values(questions), ...Object.values(bluffQuestions)].flat()) {
     if (item[5] && !images[item[5].file]) {
-      images[item[5].file] = "data:image/webp;base64," + (await readFile(`ui/questions/${item[5].file}`)).toString("base64");
+      images[item[5].file] = `data:image/${item[5].file.endsWith(".svg") ? "svg+xml" : "webp"};base64,` + (await readFile(`ui/questions/${item[5].file}`)).toString("base64");
     }
   }
-  const counts = Object.fromEntries(Object.entries(questions).map(([id, items]) => [id, items.length]));
+  const counts = Object.fromEntries([
+    ...Object.entries(questions).map(([id, items]) => [id, items.length]),
+    ...Object.entries(bluffQuestions).map(([id, items]) => ["bluff." + id, items.length])
+  ]);
 
   let appCode = app.replace(/^import .*$/gm, "");
   appCode = replaceOnce(appCode, "window.location.pathname", "previewPath()");
   appCode = replaceAll(appCode, "window.location.assign(", "previewGo(");
   appCode = replaceOnce(appCode, "new URL(`/room/${room.code}`, window.location.origin).href", "previewRoomLink(room.code)");
-  appCode = replaceOnce(appCode, '"/hero.webp?v=3"', '"${previewHero}"');
+  appCode = replaceOnce(appCode, '"/hero.webp?v=6"', '"${previewHero}"');
   appCode = replaceAll(appCode, "/questions/${e(item.image.file)}", "${previewImages[item.image.file] ?? \"\"}");
   appCode = replaceOnce(appCode, "/questions/${e(image.file)}", "${previewImages[image.file] ?? \"\"}");
 
@@ -48,7 +52,7 @@ export async function buildPreview() {
 <script>document.documentElement.lang = "ar"; document.documentElement.dir = "rtl";</script>
 <style>${css}
 .preview-bar { position: fixed; inset: auto 0 0; z-index: 50; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center;
-  padding: 8px max(16px, env(safe-area-inset-left, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)); background: #0b1d15ee; border-top: 1px solid #3c6350;
+  padding: 8px max(16px, env(safe-area-inset-left, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)); background: #080e22ee; border-top: 1px solid #344371;
   color: #e7d5a6; font-size: 14px; backdrop-filter: blur(6px); }
 .preview-bar { flex-wrap: nowrap; gap: 6px; font-size: 12px; }
 .preview-bar .btn { min-height: 34px; padding: 3px 10px; font-size: 13px; white-space: nowrap; }
@@ -96,6 +100,7 @@ const db = { prepare(query) { return { bind(...values) { return {
 const worker = (() => {
   const assets = { questionImages: {} };
   const questions = ${JSON.stringify(questions)};
+  const bluffQuestions = ${JSON.stringify(bluffQuestions)};
 ${workerCode}
 })();
 

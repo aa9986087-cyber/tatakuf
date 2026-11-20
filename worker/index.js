@@ -80,15 +80,19 @@ function getSettings(input) {
   const { rounds, seconds, categories } = input;
   const format = input.format ?? "classic";
   if (!formats.includes(format) || ![5, 10, 20].includes(rounds) || ![15, 20, 30].includes(seconds) ||
-      !Array.isArray(categories) || !categories.length || categories.length > Object.keys(questions).length ||
+      !Array.isArray(categories) || !categories.length || categories.length > Object.keys(bankFor(format)).length ||
       new Set(categories).size !== categories.length ||
-      categories.some((id) => typeof id !== "string" || !Object.hasOwn(questions, id))) {
+      categories.some((id) => typeof id !== "string" || !Object.hasOwn(bankFor(format), id))) {
     throw new GameError(400, "اختر فئة واحدة على الأقل وتحقق من إعدادات الجولة.");
   }
   return { rounds, seconds, categories, format };
 }
 
 const isBluff = (room) => room.settings.format === "bluff";
+// Bluff rounds draw from their own story-style bank; ids and history keys get a "bluff." prefix.
+function bankFor(format) { return format === "bluff" ? bluffQuestions : questions; }
+const bankOf = (room) => bankFor(room.settings.format);
+const keyOf = (room, category) => (isBluff(room) ? "bluff." : "") + category;
 
 // Compare answers loosely: spacing, punctuation, diacritics and common Arabic letter variants do not count.
 function answerKey(value) {
@@ -115,7 +119,7 @@ function chooserFor(room) {
 function availableCategories(room) {
   const seen = new Set(room.seen);
   return room.settings.categories.filter((category) =>
-    questions[category].some((_, index) => !seen.has(category + "-" + index))
+    bankOf(room)[category].some((_, index) => !seen.has(keyOf(room, category) + "-" + index))
   );
 }
 
@@ -126,16 +130,16 @@ function addHistory(room, packedHistory) {
   }
   const seen = new Set(room.seen);
   for (const category of room.settings.categories) {
-    const encoded = packedHistory[category];
+    const encoded = packedHistory[keyOf(room, category)];
     if (encoded === undefined) continue;
-    const limit = questions[category].length;
+    const limit = bankOf(room)[category].length;
     if (typeof encoded !== "string" || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded) ||
         encoded.length % 4 !== 0 || encoded.length > Math.ceil(limit / 24) * 4) {
       throw new GameError(400, "تعذّر قراءة سجل الأسئلة.");
     }
     const bytes = atob(encoded);
     for (let index = 0; index < Math.min(limit, bytes.length * 8); index += 1) {
-      if (bytes.charCodeAt(index >> 3) & (1 << (index % 8))) seen.add(category + "-" + index);
+      if (bytes.charCodeAt(index >> 3) & (1 << (index % 8))) seen.add(keyOf(room, category) + "-" + index);
     }
   }
   room.seen = [...seen];
@@ -145,7 +149,7 @@ function requireEnoughQuestions(room) {
   const seen = new Set(room.seen);
   let remaining = 0;
   for (const category of room.settings.categories) {
-    remaining += questions[category].filter((_, index) => !seen.has(category + "-" + index)).length;
+    remaining += bankOf(room)[category].filter((_, index) => !seen.has(keyOf(room, category) + "-" + index)).length;
   }
   if (remaining < room.settings.rounds) {
     throw new GameError(409, "الأسئلة الجديدة ما تكفي للجولات المختارة. جرّب فئات أكثر أو جولات أقل.");
@@ -154,13 +158,14 @@ function requireEnoughQuestions(room) {
 
 function startQuestion(room, category, now) {
   const seen = new Set(room.seen);
-  const eligible = questions[category].flatMap((_, index) => seen.has(category + "-" + index) ? [] : [index]);
+  const bank = bankOf(room)[category];
+  const eligible = bank.flatMap((_, index) => seen.has(keyOf(room, category) + "-" + index) ? [] : [index]);
   const visual = room.round === 1 || room.round % 5 === 0
-    ? eligible.filter((index) => questions[category][index][5])
+    ? eligible.filter((index) => bank[index][5])
     : [];
   const index = randomItem(visual.length ? visual : eligible);
-  const [prompt, correct, second, third, fourth, image] = questions[category][index];
-  const id = category + "-" + index;
+  const [prompt, correct, second, third, fourth, image] = bank[index];
+  const id = keyOf(room, category) + "-" + index;
   room.used.push(id);
   room.seen.push(id);
   if (isBluff(room)) {
@@ -552,10 +557,14 @@ export default {
         const bytes = Uint8Array.from(atob(assets.hero), (character) => character.charCodeAt(0));
         return response(bytes, "image/webp", { "Cache-Control": "public, max-age=3600" });
       }
-      const image = pathname.match(/^\/questions\/([a-z0-9-]+\.webp)$/)?.[1];
-      if (image && Object.hasOwn(assets.questionImages, image)) {
-        const bytes = Uint8Array.from(atob(assets.questionImages[image]), (character) => character.charCodeAt(0));
-        return response(bytes, "image/webp", { "Cache-Control": "public, max-age=86400" });
+      const image = pathname.match(/^\/questions\/([a-z0-9-]+\.(webp|svg))$/);
+      if (image && Object.hasOwn(assets.questionImages, image[1])) {
+        const bytes = Uint8Array.from(atob(assets.questionImages[image[1]]), (character) => character.charCodeAt(0));
+        // Flag SVGs are static drawings; the sandbox CSP keeps them inert if opened directly.
+        return response(bytes, image[2] === "svg" ? "image/svg+xml" : "image/webp", {
+          "Cache-Control": "public, max-age=86400",
+          ...(image[2] === "svg" ? { "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox" } : {})
+        });
       }
       if (pathname === "/favicon.ico") return new Response(null, { status: 204 });
       if (pathname === "/" || /^\/room\/[23456789A-HJ-NP-Z]{6}\/?$/i.test(pathname)) {

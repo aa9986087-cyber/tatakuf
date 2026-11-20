@@ -8,8 +8,11 @@ const categories = {
   places: { title: "جغرافيا", icon: "◉" },
   history: { title: "تاريخ", icon: "⌛" },
   culture: { title: "ثقافة وفنون", icon: "♫" },
-  tales: { title: "غرائب وحكايات", icon: "❖" }
+  movies: { title: "أفلام ومسلسلات", icon: "▶" },
+  babalhara: { title: "باب الحارة", icon: "⌂" },
+  flags: { title: "أعلام الدول", icon: "⚑" }
 };
+const bankKey = (format, category) => (format === "bluff" ? "bluff." : "") + category;
 const formats = {
   classic: { title: "كلاسيكي", description: "سؤال وأربعة خيارات، والإجابة الصحيحة بنقطة." },
   bluff: { title: "الخدعة", description: "كل لاعب يكتب جوابًا مزيّفًا يقنع فيه الباقين، ثم الكل يدوّر على الصحيح بين الخدع." }
@@ -87,17 +90,20 @@ function questionHistory() {
   }));
 }
 
-function remainingFor(category) {
-  let remainder = bankCounts[category];
-  for (let index = 0; index < bankCounts[category]; index += 1) {
-    if (seenQuestions.has(category + "-" + index)) remainder -= 1;
+function remainingFor(format, category) {
+  const key = bankKey(format, category);
+  let remainder = bankCounts[key] ?? 0;
+  for (let index = 0; index < (bankCounts[key] ?? 0); index += 1) {
+    if (seenQuestions.has(key + "-" + index)) remainder -= 1;
   }
   return remainder;
 }
 
 function updateBankCount(form) {
-  const picked = new FormData(form).getAll("category");
-  const remaining = picked.reduce((sum, category) => sum + remainingFor(category), 0);
+  const data = new FormData(form);
+  const questionFormat = data.get("format") ?? "classic";
+  const picked = data.getAll("category");
+  const remaining = picked.reduce((sum, category) => sum + remainingFor(questionFormat, category), 0);
   form.querySelector("[data-bank-count]").textContent = `${format(remaining)} سؤال جديد في الفئات المختارة`;
 }
 
@@ -105,12 +111,12 @@ function showHome() {
   app.innerHTML = `
     <section class="hero stage-in" aria-labelledby="home-title">
       <div class="hero-copy">
-        <p class="hero-kicker">${format(Object.values(bankCounts).reduce((total, count) => total + count, 0))} سؤال للتحدّي</p>
+        <p class="hero-kicker">${format(Object.values(bankCounts).reduce((total, count) => total + count, 0))} سؤال في ${format(Object.keys(categories).filter((id) => bankCounts[id]).length)} فئات</p>
         <h1 id="home-title">لعبة <strong>التكاتف</strong></h1>
         <p class="lead">جمع ربعك على سؤال واحد. اختاروا الفئة وشوفوا من يجيبها.</p>
         ${actionButton("انضم برمز الغرفة", "join", "outline")}
       </div>
-      <div class="hero-art" aria-hidden="true"><img src="/hero.webp?v=3" width="900" height="600" alt="" fetchpriority="high"></div>
+      <div class="hero-art" aria-hidden="true"><img src="/hero.webp?v=6" width="900" height="600" alt="" fetchpriority="high"></div>
     </section>
     <section class="modes" aria-labelledby="modes-title">
       <div class="section-heading"><h2 id="modes-title">اختَر طريقة اللعب</h2></div>
@@ -163,7 +169,7 @@ function openCreate(mode) {
         <label class="field">عدد الجولات<select name="rounds"><option value="5">٥ جولات</option><option value="10">١٠ جولات</option><option value="20">٢٠ جولة</option></select></label>
         <label class="field">وقت الإجابة<select name="seconds"><option value="15">١٥ ثانية</option><option value="20" selected>٢٠ ثانية</option><option value="30">٣٠ ثانية</option></select></label>
       </div>
-      <fieldset><legend>الفئات</legend><div class="check-grid">${Object.entries(categories).map(([id, item]) =>
+      <fieldset><legend>الفئات</legend><div class="check-grid">${Object.entries(categories).filter(([id]) => bankCounts[id]).map(([id, item]) =>
         `<label class="check-category"><input type="checkbox" name="category" value="${id}" checked>${item.title}</label>`
       ).join("")}</div></fieldset>
       <p class="bank-count muted" data-bank-count></p>
@@ -244,7 +250,7 @@ function paintQR() {
   const ctx = canvas.getContext("2d");
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#0a1711";
+  ctx.fillStyle = "#0b1230";
   for (let row = 0; row < count; row += 1) {
     for (let col = 0; col < count; col += 1) {
       if (symbol.isDark(row, col)) ctx.fillRect((col + 4) * moduleSize, (row + 4) * moduleSize, moduleSize, moduleSize);
@@ -627,7 +633,7 @@ function confetti() {
   canvas.height = innerHeight * ratio;
   const ctx = canvas.getContext("2d");
   ctx.scale(ratio, ratio);
-  const colors = ["#f8d581", "#f6bd58", "#91e7bc", "#fff3cf", "#e9a86b"];
+  const colors = ["#f8d581", "#f6bd58", "#5fe3d3", "#fff3cf", "#e9a86b"];
   const pieces = Array.from({ length: 140 }, () => ({
     x: innerWidth / 2 + (Math.random() - .5) * 120, y: innerHeight * .32,
     vx: (Math.random() - .5) * 15, vy: -Math.random() * 15 - 5, spin: Math.random() * 6,
@@ -768,11 +774,6 @@ document.addEventListener("keydown", unlockSound);
 document.addEventListener("change", (event) => {
   const form = event.target.form;
   if (form?.dataset.form !== "create") return;
-  if (event.target.name === "format") {
-    // Story questions make the best bluffs; classic games start with every category.
-    const bluff = event.target.value === "bluff";
-    for (const box of form.querySelectorAll('input[name="category"]')) box.checked = bluff ? box.value === "tales" : true;
-  }
   if (event.target.name === "category" || event.target.name === "format") updateBankCount(form);
 });
 document.addEventListener("click", (event) => {
