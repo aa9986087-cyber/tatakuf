@@ -149,28 +149,31 @@ function openDialog(title, description, html) {
   dialog.querySelector("input:not([type=checkbox])")?.focus();
 }
 
+// Segmented gold chips replace native dropdowns; they are plain radios, so FormData still reads them.
+function chips(name, label, options, selected) {
+  return `<fieldset class="chip-group"><legend>${label}</legend><div class="chips">${options.map(([value, text, hint]) =>
+    `<label class="chip"><input type="radio" name="${name}" value="${value}" ${value === selected ? "checked" : ""}>
+      <span>${text}${hint ? `<small>${hint}</small>` : ""}</span></label>`).join("")}</div></fieldset>`;
+}
+
 function openCreate(mode) {
   seenQuestions = new Set([...readHistory(), ...seenQuestions]);
   openDialog(modes[mode].title, modes[mode].description, `
     <form class="setup-form" data-form="create" data-mode="${mode}">
       ${nameField()}
       ${mode === "screen" ? '<p class="muted">تدخل لاعبًا وتجاوب من نفس الشاشة، ويكفي انضمام لاعب واحد معك لبدء الجلسة.</p>' : ""}
-      ${mode === "bots" ? `<div class="form-row">
-        <label class="field">عدد البوتات<select name="bots">${Array.from({ length: 7 }, (_, index) => {
-          const count = index + 1;
-          return `<option value="${count}" ${count === 2 ? "selected" : ""}>${format(count)}</option>`;
-        }).join("")}</select></label>
-        <label class="field">مستوى البوتات<select name="difficulty"><option value="easy">سهل</option><option value="normal" selected>متوسط</option><option value="hard">صعب</option></select></label>
-      </div>` : ""}
+      ${mode === "bots" ? `
+        ${chips("bots", "عدد الخصوم", Array.from({ length: 7 }, (_, index) => [String(index + 1), format(index + 1)]), "2")}
+        ${chips("difficulty", "مستوى البوتات", [["easy", "سهل", "يغلطون كثير"], ["normal", "متوسط", "منافسة متوازنة"], ["hard", "صعب", "نادرًا يغلطون"]], "normal")}` : ""}
       <fieldset class="format-picker"><legend>طريقة الأسئلة</legend>${Object.entries(formats).map(([id, item]) => `
         <label class="format-option"><input type="radio" name="format" value="${id}" ${id === "classic" ? "checked" : ""}>
           <strong>${item.title}</strong><span>${item.description}</span></label>`).join("")}</fieldset>
-      <div class="form-row">
-        <label class="field">عدد الجولات<select name="rounds"><option value="5">٥ جولات</option><option value="10">١٠ جولات</option><option value="20">٢٠ جولة</option></select></label>
-        <label class="field">وقت الإجابة<select name="seconds"><option value="15">١٥ ثانية</option><option value="20" selected>٢٠ ثانية</option><option value="30">٣٠ ثانية</option></select></label>
-      </div>
-      <fieldset><legend>الفئات</legend><div class="check-grid">${Object.entries(categories).filter(([id]) => bankCounts[id]).map(([id, item]) =>
-        `<label class="check-category"><input type="checkbox" name="category" value="${id}" checked>${item.title}</label>`
+      ${chips("rounds", "عدد الجولات", [["5", "٥", "سريعة"], ["10", "١٠", "متوسطة"], ["20", "٢٠", "طويلة"]], "5")}
+      ${chips("seconds", "وقت الإجابة", [["15", "١٥ ث"], ["20", "٢٠ ث"], ["30", "٣٠ ث"]], "20")}
+      <fieldset class="category-picker"><legend>الفئات <button type="button" class="link-button" data-action="toggle-categories">إلغاء الكل</button></legend>
+        <div class="check-grid">${Object.entries(categories).filter(([id]) => bankCounts[id]).map(([id, item]) =>
+        `<label class="check-category cat-${id}"><input type="checkbox" name="category" value="${id}" checked>
+          <span class="symbol" aria-hidden="true">${item.icon}</span><span class="check-title">${item.title}</span><span class="check-mark" aria-hidden="true">✓</span></label>`
       ).join("")}</div></fieldset>
       <p class="bank-count muted" data-bank-count></p>
       <p class="error" data-error role="alert"></p>
@@ -775,6 +778,10 @@ document.addEventListener("change", (event) => {
   const form = event.target.form;
   if (form?.dataset.form !== "create") return;
   if (event.target.name === "category" || event.target.name === "format") updateBankCount(form);
+  if (event.target.name === "category") {
+    const all = [...form.querySelectorAll('input[name="category"]')];
+    form.querySelector('[data-action="toggle-categories"]').textContent = all.every((box) => !box.checked) ? "تحديد الكل" : "إلغاء الكل";
+  }
 });
 document.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-action]");
@@ -790,6 +797,14 @@ document.addEventListener("click", (event) => {
   else if (action === "fullscreen") void fullscreen();
   else if (action === "retry") void sync();
   else if (action === "zoom") openZoom();
+  else if (action === "toggle-categories") {
+    const form = button.closest("form");
+    const boxes = [...form.querySelectorAll('input[name="category"]')];
+    const check = boxes.every((box) => !box.checked);
+    for (const box of boxes) box.checked = check;
+    button.textContent = check ? "إلغاء الكل" : "تحديد الكل";
+    updateBankCount(form);
+  }
   else if (action === "zoom-in") setZoom(.5);
   else if (action === "zoom-out") setZoom(-.5);
   else void gameAction(action, button);
