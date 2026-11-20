@@ -231,7 +231,7 @@ function reveal(room, now) {
   room.gained = {};
   for (const player of room.players) {
     const option = room.answers[player.id];
-    if (option === room.question.correctIndex) room.gained[player.id] = (room.gained[player.id] ?? 0) + (isBluff(room) ? 2 : 1);
+    if (option === room.question.correctIndex) room.gained[player.id] = (room.gained[player.id] ?? 0) + 1;
     else if (option !== undefined && isBluff(room)) {
       for (const author of room.question.authors[option]) room.gained[author] = (room.gained[author] ?? 0) + 1;
     }
@@ -395,7 +395,7 @@ function applyAction(room, player, action, input, now) {
     }
     if (Object.hasOwn(room.fakes, player.id)) return false;
     if (answerKey(text) === answerKey(room.question.correct)) {
-      throw new GameError(409, "هذي هي الإجابة الصحيحة! اكتب خدعة ثانية تضيّع فيها الباقين.");
+      throw new GameError(409, "هذي هي الإجابة الصحيحة! غيّرها واكتب جوابًا غلط يقنع الباقين.");
     }
     room.fakes[player.id] = text;
     if (Object.keys(room.fakes).length === room.players.length) startVote(room, now);

@@ -67,6 +67,7 @@ let chatKey;
 let seenQuestions = readHistory();
 let seatAttempted = false;
 let seatError = "";
+let fakeError = "";
 let previousRanks = new Map();
 let previousScores = new Map();
 
@@ -396,7 +397,8 @@ function writeView() {
             placeholder="خدعة مقنعة…" ${room.display ? 'class="masked"' : ""}>
           <button class="btn primary" type="submit">أرسل الخدعة</button>
         </form>
-        <p class="muted">${room.display ? "الكتابة مخفية عشان ما يشوفها أحد في المجلس." : "كل لاعب ينخدع بجوابك يعطيك نقطة."}</p>`}
+        <p class="fake-error" data-fake-error role="alert" ${fakeError ? "" : "hidden"}>${e(fakeError)}</p>
+        <p class="muted">${room.display ? "الكتابة مخفية عشان ما يشوفها أحد في المجلس." : "كل لاعب ينخدع بجوابك يعطيك نقطة، والإجابة الصحيحة بنقطة."}</p>`}
     <p class="muted progress">${progress}</p>
   </section>`;
 }
@@ -685,6 +687,7 @@ function renderRoom(next, force = false) {
   if (room && next.revision < room.revision) return;
   const previous = room;
   const phaseChanged = !previous || previous.phase !== next.phase || previous.round !== next.round;
+  if (phaseChanged) fakeError = "";
   room = next;
   rememberQuestions(next.seenQuestions);
   syncClock(next);
@@ -1038,6 +1041,13 @@ async function fullscreen() {
 
 document.addEventListener("pointerdown", unlockSound, { passive: true });
 document.addEventListener("keydown", unlockSound);
+document.addEventListener("input", (event) => {
+  if (event.target.name !== "fake" || !fakeError) return;
+  fakeError = "";
+  event.target.classList.remove("shake");
+  const inline = app.querySelector("[data-fake-error]");
+  if (inline) inline.hidden = true;
+});
 document.addEventListener("keydown", (event) => { if (event.key === "Escape" && chatOpen) toggleChat(false); });
 document.addEventListener("change", (event) => {
   const form = event.target.form;
@@ -1110,12 +1120,28 @@ document.addEventListener("submit", async (event) => {
     try {
       const data = await api(`/api/rooms/${roomCode}/fake`, { questionId: room.question.id, text: input.value });
       pending = false;
+      fakeError = "";
       renderRoom(data.room, true);
       playSound("locked");
     } catch (error) {
       pending = button.disabled = false;
-      errorLine.dataset.source = "action";
-      errorLine.textContent = error.status ? error.message : "تعذّر الإرسال. جرّب مرة ثانية.";
+      const message = error.status ? error.message : "تعذّر الإرسال. جرّب مرة ثانية.";
+      // Show the problem right under the box the player is typing in, and keep their text to edit.
+      const inline = app.querySelector("[data-fake-error]");
+      if (inline) {
+        fakeError = message;
+        inline.textContent = message;
+        inline.hidden = false;
+        input.classList.remove("shake");
+        void input.offsetWidth;
+        input.classList.add("shake");
+        input.focus();
+        input.select();
+        playSound("incorrect");
+      } else {
+        errorLine.dataset.source = "action";
+        errorLine.textContent = message;
+      }
       if (error.status === 409 && !/الإجابة الصحيحة/.test(error.message)) void sync();
     }
     return;

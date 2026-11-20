@@ -318,7 +318,9 @@ test("bluff rounds collect fakes, score fooled players and hide nothing until th
   assert.match(writing.question.id, /^bluff\.science-\d+$/);
   const correct = bluffBank.science.find((entry) => entry[0] === writing.question.prompt)[1];
   assert.equal((await host("/answer", { questionId, option: 0 })).status, 409);
-  assert.equal((await host("/fake", { questionId, text: ` ${correct} ` })).status, 409);
+  const sameAsAnswer = await host("/fake", { questionId, text: ` ${correct} ` });
+  assert.equal(sameAsAnswer.status, 409);
+  assert.match(sameAsAnswer.data.error, /الإجابة الصحيحة/);
   assert.equal((await host("/fake", { questionId, text: "" })).status, 400);
   const fake = (await host("/fake", { questionId, text: "خدعة ناصر" })).data.room;
   assert.equal(fake.yourFake, "خدعة ناصر");
@@ -347,7 +349,7 @@ test("bluff rounds collect fakes, score fooled players and hide nothing until th
   assert.deepEqual(revealed.question.authors[shared], ["ناصر", "محمد"]);
   assert.deepEqual(revealed.question.voters[saad], ["ناصر"]);
   const points = Object.fromEntries(revealed.players.map(({ name, score, gained }) => [name, [score, gained]]));
-  assert.deepEqual(points, { "ناصر": [1, 1], "محمد": [3, 3], "سعد": [1, 1] });
+  assert.deepEqual(points, { "ناصر": [1, 1], "محمد": [2, 2], "سعد": [1, 1] });
 });
 
 test("bluff bots write fakes and vote on the server clock, and silent rounds still advance", async (t) => {

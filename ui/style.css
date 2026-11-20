@@ -822,3 +822,10 @@ body::after {
 .join-chip:hover { border-color: var(--gold); background: #1a2246; transform: translateY(-1px); }
 @media (max-width: 600px) { .join-chip { justify-self: center; margin-inline: auto; } }
 #game-title:focus, #game-title:focus-visible { outline: none; }
+
+.fake-error {
+  margin: 10px 0 0; padding: 10px 14px; border-radius: 12px; font-weight: 800; line-height: 1.6;
+  color: #ffe1dc; background: #4a1f28; border: 1px solid #ff7a8a; animation: option-in .35s cubic-bezier(.3,1.5,.5,1);
+}
+.fake-form input.shake { border-color: #ff7a8a; animation: shake .45s; }
+@keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
