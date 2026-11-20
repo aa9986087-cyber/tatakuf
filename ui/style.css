@@ -658,21 +658,6 @@ input::placeholder { -webkit-text-fill-color: #8d97b8; color: #8d97b8; }
 .signature-logo { width: auto; height: 70px; }
 @media (max-width: 420px) { .brand-mark { width: 38px; height: 38px; } .signature-logo { height: 58px; } }
 
-/* Results as a grid of cards, like the answer options; the leader gets the full row */
-.rank-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.rank-row {
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "medal name gain" "medal score score";
-  align-items: center; gap: 2px 10px; min-height: 66px; padding: 10px 12px; border-radius: 15px;
-}
-.rank-medal { grid-area: medal; width: 34px; height: 34px; }
-.rank-name { grid-area: name; font-size: 15px; }
-.round-gain { grid-area: gain; justify-self: end; }
-.rank-score { grid-area: score; margin: 0; justify-self: start; font-size: 19px; }
-.rank-row:first-child { grid-column: 1 / -1; min-height: 76px; padding: 12px 16px; }
-.rank-row:first-child .rank-medal { width: 44px; height: 44px; font-size: 20px; }
-.rank-row:first-child .rank-name { font-size: 18px; }
-.rank-row:first-child .rank-score { font-size: 24px; }
-.rank-row:last-child:nth-child(even) { grid-column: 1 / -1; }
 
 /* Signature lives only on the home screen */
 .home-signature {
@@ -693,3 +678,24 @@ input::placeholder { -webkit-text-fill-color: #8d97b8; color: #8d97b8; }
 .reveal-card strong { font-size: clamp(17px, 2.4vw, 24px); }
 .reveal-voters { font-size: 13px; line-height: 1.5; }
 .reveal-card.is-correct strong { font-size: clamp(20px, 3vw, 30px); }
+
+/* Reveal stage one: answers stay put, coloured, with names inside each box */
+.options.revealed .option { align-items: flex-start; cursor: default; }
+.option-body { display: grid; gap: 4px; min-width: 0; }
+.option-text { font-weight: 850; }
+.option-tag { font-size: 12.5px; font-weight: 800; color: #f3b59c; }
+.option-voters { font-size: 13px; font-weight: 700; color: var(--muted); line-height: 1.5; }
+.option.result { animation: result-in .55s cubic-bezier(.2,.8,.25,1.15) calc(var(--step) * 420ms + 150ms) both; }
+.option.result.wrong { background: #171c2e; border-color: #3a3346; }
+.option.result.wrong.picked { border-color: #a96d64; background: linear-gradient(150deg, #2c2026, #171c2e); }
+.option.result.correct { border-color: #6fd8c9; background: linear-gradient(150deg, #173f45, #12243a); }
+.option.result.correct .option-tag { color: var(--jade); }
+.option.result.correct .option-voters { color: #cdeee9; }
+.option.result.correct .option-mark { color: #0d2a2c; background: var(--jade); }
+.option.result.mine { box-shadow: 0 0 0 2px #f8d58199 inset; }
+.option.result.correct { animation-name: result-in, correct-glow; animation-duration: .55s, 1.6s; animation-delay: calc(var(--step) * 420ms + 150ms), calc(var(--step) * 420ms + 650ms); animation-iteration-count: 1, 2; }
+@keyframes result-in { from { opacity: .35; transform: scale(.96); filter: saturate(0); } }
+.reveal-status { margin-top: 2px; }
+.results-timer { display: grid; gap: 6px; }
+.results-timer p { margin: 0; text-align: center; }
+.results-timer .timer-row { margin: 0; }

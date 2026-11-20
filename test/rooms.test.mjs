@@ -82,7 +82,9 @@ test("two independent players complete a match and rematch with fresh questions"
     assert.deepEqual(revealed.players.map(({ score }) => score), [round, round]);
     assert.deepEqual(revealed.players.map(({ gained }) => gained), [1, 1]);
     assert.deepEqual((await host()).data.room.players, revealed.players);
-    t.mock.timers.tick(4999);
+    assert.deepEqual(revealed.question.voters[option], ["ناصر", "محمد"]);
+    assert.equal(revealed.question.authors, undefined);
+    t.mock.timers.tick(7999);
     assert.equal((await guest()).data.room.phase, "reveal");
     t.mock.timers.tick(1);
     state = (await host()).data.room;
@@ -142,7 +144,7 @@ test("a 20-round match samples only unseen questions and refuses a repeat after 
     assert.equal(observed.has(state.question.id), false);
     assert.equal(state.seenQuestions.length, round);
     observed.add(state.question.id);
-    t.mock.timers.tick(15_000 + (round === 20 ? 5500 : 5000));
+    t.mock.timers.tick(15_000 + (round === 20 ? 5500 : 8000));
   }
   assert.equal(observed.size, 20);
   assert.equal((await host()).data.room.phase, "finished");
@@ -390,7 +392,7 @@ test("everyone sees who picked the category, or that the clock picked it", async
   await host("/start", {});
   await host("/category", { round: 1, category: "science" });
   assert.equal((await guest()).data.room.question.pickedBy, "ناصر");
-  t.mock.timers.tick(15_000 + 5_000 + 15_000);
+  t.mock.timers.tick(15_000 + 8_000 + 15_000);
   const timedOut = (await host()).data.room;
   assert.equal(timedOut.round, 2);
   assert.equal(timedOut.phase, "question");

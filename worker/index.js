@@ -2,8 +2,9 @@ const codeAlphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 const day = 86_400_000;
 const categoryTime = 15_000;
 const maxPlayers = 8;
-const revealTime = 5_000;
-const bluffRevealTime = 9_000;
+// The reveal shows the coloured answers with names first, then the leaderboard.
+const revealTime = 8_000;
+const bluffRevealTime = 11_000;
 const finaleTime = 5_500;
 const botTurnTime = 2_200;
 const writeExtraTime = 15_000;
@@ -300,11 +301,11 @@ function viewRoom(room, player, revision, now = Date.now()) {
     ...(bluff && room.phase === "vote" ? {
       ownOptions: room.question.authors.flatMap((authors, index) => authors.includes(player.id) ? [index] : [])
     } : {}),
-    ...(bluff && showAnswer ? {
-      authors: room.question.authors.map((authors) => authors.map(nameOf)),
+    ...(showAnswer ? {
       voters: room.question.options.map((_, index) =>
         room.players.filter((entry) => room.answers[entry.id] === index).map((entry) => entry.name))
-    } : {})
+    } : {}),
+    ...(bluff && showAnswer ? { authors: room.question.authors.map((authors) => authors.map(nameOf)) } : {})
   } : null;
 
   return {

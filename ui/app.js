@@ -312,9 +312,19 @@ function lobby() {
   </section>`;
 }
 
+// The reveal has two stages: coloured answers with names, then the leaderboard.
+const revealAnswersTime = { classic: 4000, bluff: 6500 };
+let renderedReveal = null;
+function revealStage() {
+  if (room?.phase !== "reveal" || room.deadline == null) return null;
+  const kind = room.settings.format ?? "classic";
+  const start = room.deadline - phaseDuration();
+  return Date.now() + clockOffset - start < revealAnswersTime[kind] ? "answers" : "board";
+}
+
 function phaseDuration() {
   const chooser = room.players.find((player) => player.id === room.chooserId);
-  return room.phase === "finale" ? 5500 : room.phase === "reveal" ? (room.settings.format === "bluff" ? 9000 : 5000)
+  return room.phase === "finale" ? 5500 : room.phase === "reveal" ? (room.settings.format === "bluff" ? 11000 : 8000)
     : room.phase === "select" ? (chooser?.bot ? 2200 : 15000)
     : room.phase === "write" ? room.settings.seconds * 1000 + 15000 : room.settings.seconds * 1000;
 }
@@ -422,24 +432,35 @@ function leaderboard(order, title) {
     }).join("")}</ol></section>`;
 }
 
-function bluffReveal(item) {
-  // Fakes flip first, one by one, and the right answer lands last.
-  const order = item.options.map((_, index) => index).filter((index) => index !== item.correctIndex);
-  order.push(item.correctIndex);
-  return `<section class="panel bluff-reveal"><h2>مين خدع مين؟</h2><ol class="reveal-list">${order.map((index, step) => {
+// Stage one of the reveal: the answers stay on screen, coloured, with who picked each (and who wrote each fake).
+function answersView() {
+  const item = room.question;
+  const bluff = Boolean(item.authors);
+  const me = room.players.find((player) => player.id === room.playerId);
+  const names = (list) => list.map((name) => `<bdi>${e(name)}</bdi>`).join("، ");
+  const headline = room.display ? `الإجابة الصحيحة: <bdi>${e(item.options[item.correctIndex])}</bdi>`
+    : me?.gained ? `كسبت +${format(me.gained)} هالجولة` : room.yourAnswer === null ? "انتهى وقت الإجابة" : "ما كسبت نقاط هالجولة";
+  return `${questionCard(item)}
+  <div class="options revealed${item.options.length > 4 ? " many" : ""}" aria-label="نتيجة الخيارات">${item.options.map((option, index) => {
     const correct = index === item.correctIndex;
-    const authors = item.authors[index];
-    const voters = item.voters[index];
-    const label = correct ? "الإجابة الصحيحة" : authors.length ? `خدعة <bdi>${authors.map(e).join(" و")}</bdi>` : "خدعة اللعبة";
-    return `<li class="reveal-card${correct ? " is-correct" : ""}" style="--step:${step}">
-      <span class="reveal-inner"><span class="reveal-label">${label}</span><strong><bdi>${e(item.options[index])}</bdi></strong>
-      <span class="reveal-voters">${voters.length ? `${correct ? "عرفها" : "انخدع فيها"}: ${voters.map((name) => `<bdi>${e(name)}</bdi>`).join("، ")}` : correct ? "ما أحد عرفها" : "ما انخدع فيها أحد"}</span></span>
-    </li>`;
-  }).join("")}</ol></section>`;
+    const step = correct ? item.options.length : index < item.correctIndex ? index : index - 1;
+    const voters = item.voters?.[index] ?? [];
+    const authors = item.authors?.[index] ?? [];
+    const tag = correct ? "الإجابة الصحيحة" : bluff ? (authors.length ? `خدعة ${names(authors)}` : "خدعة اللعبة") : "";
+    const who = voters.length ? `${correct ? "عرفها" : bluff ? "انخدع" : "اختارها"}: ${names(voters)}` : correct ? "ما أحد عرفها" : "";
+    const mine = !room.display && index === room.yourAnswer;
+    return `<div class="option result ${correct ? "correct" : "wrong"}${mine ? " mine" : ""}${voters.length ? " picked" : ""}" style="--step:${step}">
+      <span class="option-mark" aria-hidden="true">${correct ? "✓" : letters[index] ?? format(index + 1)}</span>
+      <span class="option-body"><bdi class="option-text">${e(option)}</bdi>
+        ${tag ? `<small class="option-tag">${tag}</small>` : ""}${who ? `<small class="option-voters">${who}</small>` : ""}</span>
+    </div>`;
+  }).join("")}</div>
+  <p class="answer-status reveal-status"><span>${headline}</span><span class="muted">الترتيب بعد لحظات</span></p>`;
 }
 
 function roundResults() {
   if (room.round === room.settings.rounds) return finale();
+  if (revealStage() === "answers") return answersView();
   const item = room.question;
   const correct = room.yourAnswer === item.correctIndex;
   const outcome = room.display ? "الإجابة الصحيحة" : room.yourAnswer === null ? "انتهى وقت الإجابة" : correct ? "إجابة صحيحة" : "إجابة غير صحيحة";
@@ -454,10 +475,8 @@ function roundResults() {
       <p class="eyebrow">الجولة ${format(room.round)} من ${format(room.settings.rounds)}</p>
       <h2 id="results-title">نتيجة الجولة</h2>
     </header>
-    <section class="panel round-answer">
-      <div><p class="eyebrow">${item.authors && !room.display ? "نتيجتك" : outcome}</p><h2>${headline}</h2></div>
-      <div><p class="muted">نرجع للعبة تلقائيًا</p>${timer()}</div>
-    </section>${item.authors ? bluffReveal(item) : ""}${leaderboard(order, "ترتيب اللاعبين")}
+    <div class="results-timer"><p class="muted">${item.authors && !room.display ? `${headline} · ` : ""}الجولة التالية تلقائيًا</p>${timer()}</div>
+    ${leaderboard(order, "ترتيب اللاعبين")}
   </div></section>`;
 }
 
@@ -670,7 +689,7 @@ function renderRoom(next, force = false) {
   }
   const body = app.querySelector(".game-main");
   const { now, chat, revision, seenQuestions: history, __timing, ...stageState } = room;
-  const key = JSON.stringify(stageState);
+  const key = JSON.stringify(stageState) + (revealStage() ?? "");
   if (stageKey !== key || force) {
     stageKey = key;
     const active = document.activeElement;
@@ -679,6 +698,9 @@ function renderRoom(next, force = false) {
       reveal:roundResults, finale, finished }[room.phase]();
     // Keep half-typed names and fakes when the stage refreshes because someone else acted.
     const typing = [...body.querySelectorAll("input[name]")].map((input) => [input.name, input.value, input === active]);
+    const stageNow = revealStage();
+    const revealSwitch = !phaseChanged && stageNow !== renderedReveal && stageNow === "board";
+    renderedReveal = stageNow;
     body.classList.toggle("settled", !phaseChanged);
     // The results screen lives directly under <body> (the stage's own animation would trap a fixed layer),
     // slides up when it opens and slides away over the next stage when it closes.
@@ -691,7 +713,7 @@ function renderRoom(next, force = false) {
     body.innerHTML = view;
     const results = body.querySelector(".results-screen");
     if (results) {
-      results.classList.toggle("entering", phaseChanged);
+      results.classList.toggle("entering", phaseChanged || revealSwitch);
       document.body.append(results);
     }
     document.documentElement.classList.toggle("results-open", Boolean(results));
@@ -715,6 +737,9 @@ function renderRoom(next, force = false) {
       if (previous) stinger();
       animateLeaderboard();
       if (room.phase === "finished") confetti();
+    } else if (revealSwitch) {
+      animateLeaderboard();
+      playSound("select");
     } else if (focus) {
       [...body.querySelectorAll("button[data-action]")].find((button) => !button.disabled &&
         button.dataset.action === focus && button.dataset.category === active.dataset.category &&
@@ -746,6 +771,7 @@ async function seatDisplayHost(name) {
 
 function updateTimer() {
   if (!room?.deadline) return;
+  if (room.phase === "reveal" && revealStage() !== renderedReveal) { renderRoom(room, true); return; }
   const label = stageRoot().querySelector("[data-timer]");
   const fill = stageRoot().querySelector(".timer-fill");
   if (!label || !fill) return;
