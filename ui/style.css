@@ -581,3 +581,31 @@ button { color: inherit; }
 }
 .game { padding-bottom: 90px; }
 .stinger { -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); background: linear-gradient(90deg, #0a10267a, #0a1026f5 16%, #0a1026f5 84%, #0a10267a); }
+
+/* Full-screen round results */
+.results-screen {
+  position: fixed; inset: 0; z-index: 15; overflow-y: auto; overscroll-behavior: contain;
+  padding: calc(28px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(110px + var(--dock-offset, 0px) + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  background: radial-gradient(ellipse at 50% -15%, #2a3a74 0%, #121a3c 45%, #080c19 85%);
+}
+.results-screen::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .5;
+  background: radial-gradient(circle at 20% 30%, #f8d58114 0 2px, transparent 3px) 0 0 / 46px 46px,
+              radial-gradient(circle at 70% 60%, #8fe9e012 0 1.5px, transparent 2.5px) 0 0 / 64px 64px;
+}
+.results-inner { width: min(760px, 100%); margin-inline: auto; display: grid; gap: clamp(16px, 2.6vw, 22px); }
+.results-head { text-align: center; display: grid; gap: 4px; padding-block: 6px 4px; }
+.results-head .eyebrow { margin: 0; letter-spacing: .02em; }
+.results-head h2 { margin: 0; color: var(--gold); font-size: clamp(32px, 6vw, 60px); line-height: 1.2; text-shadow: 0 0 34px #f6bd5844; }
+.results-screen.entering { animation: results-in .6s cubic-bezier(.2,.9,.2,1) both; }
+.results-screen.entering .results-head { animation: option-in .5s cubic-bezier(.2,.85,.25,1.2) .25s both; }
+.results-screen.entering .results-inner > .panel { animation: option-in .5s cubic-bezier(.2,.85,.25,1.2) both; }
+.results-screen.entering .results-inner > .panel:nth-of-type(1) { animation-delay: .35s; }
+.results-screen.entering .results-inner > .panel:nth-of-type(2) { animation-delay: .5s; }
+.results-screen.entering .results-inner > .panel:nth-of-type(3) { animation-delay: .65s; }
+.results-screen.leaving { animation: results-out .5s cubic-bezier(.6,0,.8,.4) forwards; pointer-events: none; }
+@keyframes results-in { from { transform: translateY(100%); } }
+@keyframes results-out { to { transform: translateY(-100%); opacity: .4; } }
+html.results-open, html.results-open body { overflow: hidden; }
+[data-display] .results-inner { width: min(1000px, 100%); }
+.results-screen:not(.entering) .rank-row { animation: none; }

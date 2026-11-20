@@ -418,10 +418,17 @@ function roundResults() {
   const mine = room.players.find((player) => player.id === room.playerId)?.gained ?? 0;
   const headline = !item.authors ? `<bdi>${e(item.options[item.correctIndex])}</bdi>`
     : room.display ? "الحقيقة تنكشف…" : mine ? `كسبت +${format(mine)}` : "ما كسبت نقاط هالجولة";
-  return `<section class="panel round-answer">
-    <div><p class="eyebrow">${item.authors && !room.display ? "نتيجتك" : outcome}</p><h2>${headline}</h2></div>
-    <div><p class="muted">الجولة التالية تلقائيًا</p>${timer()}</div>
-  </section>${item.authors ? bluffReveal(item) : ""}${leaderboard(order, "ترتيب اللاعبين")}`;
+  // Round results take over the whole screen, then slide away when the next round starts.
+  return `<section class="results-screen" role="region" aria-labelledby="results-title"><div class="results-inner">
+    <header class="results-head">
+      <p class="eyebrow">الجولة ${format(room.round)} من ${format(room.settings.rounds)}</p>
+      <h2 id="results-title">نتيجة الجولة</h2>
+    </header>
+    <section class="panel round-answer">
+      <div><p class="eyebrow">${item.authors && !room.display ? "نتيجتك" : outcome}</p><h2>${headline}</h2></div>
+      <div><p class="muted">نرجع للعبة تلقائيًا</p>${timer()}</div>
+    </section>${item.authors ? bluffReveal(item) : ""}${leaderboard(order, "ترتيب اللاعبين")}
+  </div></section>`;
 }
 
 function finale() {
@@ -565,7 +572,21 @@ function renderRoom(next, force = false) {
     // Keep half-typed names and fakes when the stage refreshes because someone else acted.
     const typing = [...body.querySelectorAll("input[name]")].map((input) => [input.name, input.value, input === active]);
     body.classList.toggle("settled", !phaseChanged);
+    // The results screen lives directly under <body> (the stage's own animation would trap a fixed layer),
+    // slides up when it opens and slides away over the next stage when it closes.
+    const current = document.querySelector("body > .results-screen:not(.leaving)");
+    if (current && phaseChanged && !reducedMotion.matches) {
+      current.classList.add("leaving");
+      current.addEventListener("animationend", () => current.remove(), { once: true });
+      setTimeout(() => current.remove(), 900);
+    } else current?.remove();
     body.innerHTML = view;
+    const results = body.querySelector(".results-screen");
+    if (results) {
+      results.classList.toggle("entering", phaseChanged);
+      document.body.append(results);
+    }
+    document.documentElement.classList.toggle("results-open", Boolean(results));
     for (const [name, value, focused] of typing) {
       const input = body.querySelector(`input[name="${name}"]`);
       if (!input || phaseChanged) continue;
@@ -617,8 +638,8 @@ async function seatDisplayHost(name) {
 
 function updateTimer() {
   if (!room?.deadline) return;
-  const label = app.querySelector("[data-timer]");
-  const fill = app.querySelector(".timer-fill");
+  const label = stageRoot().querySelector("[data-timer]");
+  const fill = stageRoot().querySelector(".timer-fill");
   if (!label || !fill) return;
   const remaining = Math.max(0, room.deadline - (Date.now() + clockOffset));
   const seconds = Math.ceil(remaining / 1000);
@@ -660,8 +681,11 @@ function stinger() {
 }
 
 // Rows slide from their previous rank and scores count up to the new total.
+// The visible stage: the open results screen when there is one, otherwise the game itself.
+const stageRoot = () => document.querySelector("body > .results-screen:not(.leaving)") ?? app;
+
 function animateLeaderboard() {
-  const rows = [...app.querySelectorAll(".rank-row[data-player]")];
+  const rows = [...stageRoot().querySelectorAll(".rank-row[data-player]")];
   const nextRanks = new Map(rows.map((row, index) => [row.dataset.player, index]));
   if (!reducedMotion.matches) {
     const height = rows[0]?.offsetHeight ?? 0;
