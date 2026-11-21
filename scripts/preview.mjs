@@ -171,7 +171,7 @@ setInterval(async () => {
     if (room.phase === "select" && room.chooserId === room.playerId && Math.random() < 0.4) {
       await asPlayer(token, "/category", { round: room.round, category: room.available[Math.floor(Math.random() * room.available.length)] });
     } else if (room.phase === "write" && room.yourFake === null && Math.random() < 0.2) {
-      const fakes = ["قطعة بسكويت", "عام ١٧٧٧", "البطريق", "سبعة", "جزر القمر", "الرصاص", "الحمام الزاجل"];
+      const fakes = ["قطعة بسكويت", "عام 1777", "البطريق", "سبعة", "جزر القمر", "الرصاص", "الحمام الزاجل"];
       await asPlayer(token, "/fake", { questionId: room.question.id, text: fakes[Math.floor(Math.random() * fakes.length)] });
     } else if ((room.phase === "question" || room.phase === "vote") && room.yourAnswer === null && Math.random() < 0.25) {
       const own = room.question.ownOptions ?? [];

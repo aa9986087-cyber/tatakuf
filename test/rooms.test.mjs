@@ -65,11 +65,19 @@ test("two independent players complete a match and rematch with fresh questions"
     assert.equal((await host("/answer", answer(invalidOption))).data.room.yourAnswer, option);
     const revealed = (await guest("/answer", answer(option))).data.room;
     if (round === 5) {
-      assert.equal(revealed.phase, "finale");
-      assert.equal(revealed.question, null);
-      assert.equal(revealed.yourAnswer, null);
+      // The last round still shows who answered what, but keeps the scores hidden for the finale.
+      assert.equal(revealed.phase, "reveal");
+      assert.equal(revealed.question.correctIndex, option);
+      assert.deepEqual(revealed.question.voters[option], ["ناصر", "محمد"]);
       assert.equal(revealed.players.some((player) => Object.hasOwn(player, "score")), false);
-      assert.equal(revealed.lastAnswer, undefined);
+      t.mock.timers.tick(6999);
+      assert.equal((await host()).data.room.phase, "reveal");
+      t.mock.timers.tick(1);
+      const suspense = (await host()).data.room;
+      assert.equal(suspense.phase, "finale");
+      assert.equal(suspense.question, null);
+      assert.equal(suspense.yourAnswer, null);
+      assert.equal(suspense.lastAnswer, undefined);
       t.mock.timers.tick(5499);
       assert.equal((await host()).data.room.phase, "finale");
       t.mock.timers.tick(1);
@@ -84,7 +92,7 @@ test("two independent players complete a match and rematch with fresh questions"
     assert.deepEqual((await host()).data.room.players, revealed.players);
     assert.deepEqual(revealed.question.voters[option], ["ناصر", "محمد"]);
     assert.equal(revealed.question.authors, undefined);
-    t.mock.timers.tick(7999);
+    t.mock.timers.tick(11999);
     assert.equal((await guest()).data.room.phase, "reveal");
     t.mock.timers.tick(1);
     state = (await host()).data.room;
@@ -148,7 +156,7 @@ test("a 20-round match samples only unseen questions and refuses a repeat after 
     assert.equal(observed.has(state.question.id), false);
     assert.equal(state.seenQuestions.length, round);
     observed.add(state.question.id);
-    t.mock.timers.tick(15_000 + (round === 20 ? 5500 : 8000));
+    t.mock.timers.tick(15_000 + (round === 20 ? 7000 + 5500 : 12000));
   }
   assert.equal(observed.size, 20);
   assert.equal((await host()).data.room.phase, "finished");
@@ -400,7 +408,7 @@ test("everyone sees who picked the category, or that the clock picked it", async
   await host("/start", {});
   await host("/category", { round: 1, category: "science" });
   assert.equal((await guest()).data.room.question.pickedBy, "ناصر");
-  t.mock.timers.tick(15_000 + 8_000 + 15_000);
+  t.mock.timers.tick(15_000 + 12_000 + 15_000);
   const timedOut = (await host()).data.room;
   assert.equal(timedOut.round, 2);
   assert.equal(timedOut.phase, "question");

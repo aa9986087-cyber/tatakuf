@@ -32,7 +32,7 @@ const app = document.querySelector("#app");
 const dialog = document.querySelector("#dialog");
 const dialogContent = document.querySelector("#dialog-content");
 const toast = document.querySelector("#toast");
-const number = new Intl.NumberFormat("ar-KW-u-nu-arab", { useGrouping: false });
+const number = new Intl.NumberFormat("en-US", { useGrouping: false });
 const format = (value) => number.format(value);
 const codePattern = /^[23456789A-HJ-NP-Z]{6}$/;
 const roomCode = window.location.pathname.split("/")[2]?.toUpperCase();
@@ -188,8 +188,8 @@ function openCreate(mode) {
       <fieldset class="format-picker"><legend>طريقة الأسئلة</legend>${Object.entries(formats).map(([id, item]) => `
         <label class="format-option"><input type="radio" name="format" value="${id}" ${id === "classic" ? "checked" : ""}>
           <strong>${item.title}</strong><span>${item.description}</span></label>`).join("")}</fieldset>
-      ${chips("rounds", "عدد الجولات", [["5", "٥", "سريعة"], ["10", "١٠", "متوسطة"], ["20", "٢٠", "طويلة"]], "5")}
-      ${chips("seconds", "وقت الإجابة", [["15", "١٥ ث"], ["20", "٢٠ ث"], ["30", "٣٠ ث"]], "20")}
+      ${chips("rounds", "عدد الجولات", [["5", "5", "سريعة"], ["10", "10", "متوسطة"], ["20", "20", "طويلة"]], "5")}
+      ${chips("seconds", "وقت الإجابة", [["15", "15 ث"], ["20", "20 ث"], ["30", "30 ث"]], "20")}
       <fieldset class="category-picker"><legend>الفئات <button type="button" class="link-button" data-action="toggle-categories">إلغاء الكل</button></legend>
         <div class="check-grid">${Object.entries(categories).filter(([id]) => bankCounts[id]).map(([id, item]) =>
         `<label class="check-category cat-${id}"><input type="checkbox" name="category" value="${id}" checked>
@@ -310,7 +310,7 @@ function lobby() {
     </div>
     ${room.display ? `<figure class="qr-block"><canvas data-room-qr aria-label="رمز QR للانضمام"></canvas><figcaption>${e(room.code)}</figcaption></figure>` : ""}
   </section>
-  <section class="panel"><h2>اللاعبون <span class="muted">(${format(count)}/١٥)</span></h2>
+  <section class="panel"><h2>اللاعبون <span class="muted">(${format(count)}/15)</span></h2>
     <div class="settings-line"><span>${formats[settings.format ?? "classic"].title}</span><span>${format(settings.rounds)} جولات</span><span>${format(settings.seconds)} ثانية للسؤال</span>
       ${room.mode === "bots" ? `<span>${{ easy:"سهل", normal:"متوسط", hard:"صعب" }[settings.difficulty]}</span>` : ""}</div>
     ${count ? playersList(room.players, false, false, room.display) : `<p class="muted">بانتظار أول لاعب.</p>`}
@@ -319,18 +319,21 @@ function lobby() {
 }
 
 // The reveal has two stages: coloured answers with names, then the leaderboard.
-const revealAnswersTime = { classic: 4000, bluff: 6500 };
+const revealAnswersTime = { classic: 7000, bluff: 10000 };
+const isFinalRound = () => room.round === room.settings.rounds;
 let renderedReveal = null;
 function revealStage() {
   if (room?.phase !== "reveal" || room.deadline == null) return null;
   const kind = room.settings.format ?? "classic";
   const start = room.deadline - phaseDuration();
+  if (isFinalRound()) return "answers";
   return Date.now() + clockOffset - start < revealAnswersTime[kind] ? "answers" : "board";
 }
 
 function phaseDuration() {
   const chooser = room.players.find((player) => player.id === room.chooserId);
-  return room.phase === "finale" ? 5500 : room.phase === "reveal" ? (room.settings.format === "bluff" ? 11000 : 8000)
+  return room.phase === "finale" ? 5500 : room.phase === "reveal"
+    ? revealAnswersTime[room.settings.format ?? "classic"] + (isFinalRound() ? 0 : 5000)
     : room.phase === "select" ? (chooser?.bot ? 2200 : 15000)
     : room.phase === "write" ? room.settings.seconds * 1000 + 15000 : room.settings.seconds * 1000;
 }
@@ -460,7 +463,9 @@ function answersView() {
   const me = room.players.find((player) => player.id === room.playerId);
   const names = (list) => list.map((name) => `<bdi>${e(name)}</bdi>`).join("، ");
   const headline = room.display ? `الإجابة الصحيحة: <bdi>${e(item.options[item.correctIndex])}</bdi>`
-    : me?.gained ? `كسبت +${format(me.gained)} هالجولة` : room.yourAnswer === null ? "انتهى وقت الإجابة" : "ما كسبت نقاط هالجولة";
+    : room.yourAnswer === null ? "انتهى وقت الإجابة"
+    : isFinalRound() ? (room.yourAnswer === item.correctIndex ? "إجابتك صحيحة ✓" : "إجابتك غلط")
+    : me?.gained ? `كسبت +${format(me.gained)} هالجولة` : "ما كسبت نقاط هالجولة";
   return `${questionCard(item)}
   <div class="options revealed${item.options.length > 4 ? " many" : ""}" aria-label="نتيجة الخيارات">${item.options.map((option, index) => {
     const correct = index === item.correctIndex;
@@ -476,11 +481,10 @@ function answersView() {
         ${tag ? `<small class="option-tag">${tag}</small>` : ""}${who ? `<small class="option-voters">${who}</small>` : ""}</span>
     </div>`;
   }).join("")}</div>
-  <p class="answer-status reveal-status"><span>${headline}</span><span class="muted">الترتيب بعد لحظات</span></p>`;
+  <p class="answer-status reveal-status"><span>${headline}</span><span class="muted">${isFinalRound() ? "النتيجة النهائية بعد لحظات" : "الترتيب بعد لحظات"}</span></p>`;
 }
 
 function roundResults() {
-  if (room.round === room.settings.rounds) return finale();
   if (revealStage() === "answers") return answersView();
   const item = room.question;
   const correct = room.yourAnswer === item.correctIndex;
@@ -662,7 +666,7 @@ function updateChatBadge() {
   const before = Number(badge.dataset.count ?? 0);
   badge.hidden = !unread;
   badge.dataset.count = unread;
-  badge.textContent = unread > 9 ? "+٩" : format(unread);
+  badge.textContent = unread > 9 ? "+9" : format(unread);
   if (unread > before) {
     const fab = app.querySelector(".chat-fab");
     fab.classList.remove("ping");
@@ -1173,7 +1177,7 @@ document.addEventListener("submit", async (event) => {
   errorElement.textContent = "";
   if (kind === "join-code") {
     const code = data.get("code").trim().toUpperCase();
-    if (!codePattern.test(code)) errorElement.textContent = "اكتب رمز الغرفة المكوّن من ٦ خانات.";
+    if (!codePattern.test(code)) errorElement.textContent = "اكتب رمز الغرفة المكوّن من 6 خانات.";
     else window.location.assign(`/room/${code}`);
     return;
   }

@@ -2,9 +2,10 @@ const codeAlphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 const day = 86_400_000;
 const categoryTime = 15_000;
 const maxPlayers = 15;
-// The reveal shows the coloured answers with names first, then the leaderboard.
-const revealTime = 8_000;
-const bluffRevealTime = 11_000;
+// The reveal shows the coloured answers with names first, then the leaderboard. The last round shows
+// the answers too, then goes to the finale instead of the leaderboard.
+const revealAnswersTime = { classic: 7_000, bluff: 10_000 };
+const revealBoardTime = 5_000;
 const finaleTime = 5_500;
 const botTurnTime = 2_200;
 const writeExtraTime = 15_000;
@@ -41,7 +42,7 @@ function normalizeName(value) {
   if (typeof value !== "string") throw new GameError(400, "اكتب اسمك في اللعبة.");
   const name = value.trim().replace(/\s+/gu, " ");
   if (!name || [...name].length > 24 || /[\p{Cc}\p{Cf}]/u.test(name)) {
-    throw new GameError(400, "اكتب اسمًا من ١ إلى ٢٤ حرفًا.");
+    throw new GameError(400, "اكتب اسمًا من 1 إلى 24 حرفًا.");
   }
   return name;
 }
@@ -237,16 +238,20 @@ function reveal(room, now) {
     }
   }
   for (const player of room.players) player.score += room.gained[player.id] ?? 0;
-  const finalRound = room.round === room.settings.rounds;
-  room.phase = finalRound ? "finale" : "reveal";
-  room.deadline = now + (finalRound ? finaleTime : isBluff(room) ? bluffRevealTime : revealTime);
+  room.phase = "reveal";
+  room.deadline = now + revealDuration(room);
   room.botAnswers = [];
+}
+
+function revealDuration(room) {
+  const answers = revealAnswersTime[room.settings.format ?? "classic"] ?? revealAnswersTime.classic;
+  return answers + (room.round === room.settings.rounds ? 0 : revealBoardTime);
 }
 
 function advanceByClock(room, now) {
   let changed = false;
   if (room.phase === "reveal" && room.deadline === null) {
-    room.deadline = now + (isBluff(room) ? bluffRevealTime : revealTime);
+    room.deadline = now + revealDuration(room);
     changed = true;
   }
   for (;;) {
@@ -272,7 +277,10 @@ function advanceByClock(room, now) {
     else if (room.phase === "question" || room.phase === "vote") reveal(room, deadline);
     else if (room.phase === "write") startVote(room, deadline);
     else if (room.phase === "reveal" && room.round < room.settings.rounds) startSelection(room, deadline);
-    else if (room.phase === "finale" || room.phase === "reveal") {
+    else if (room.phase === "reveal") {
+      room.phase = "finale";
+      room.deadline = deadline + finaleTime;
+    } else if (room.phase === "finale") {
       room.phase = "finished";
       room.deadline = null;
     } else return changed;
@@ -393,7 +401,7 @@ function applyAction(room, player, action, input, now) {
     if (room.phase !== "write" || room.question.id !== input.questionId) throw new GameError(409, "انتهى وقت كتابة الخدعة.");
     const text = typeof input.text === "string" ? input.text.trim().replace(/\s+/gu, " ") : "";
     if (!text || [...text].length > 40 || /[\p{Cc}\u202a-\u202e\u2066-\u2069]/u.test(text) || !answerKey(text)) {
-      throw new GameError(400, "اكتب خدعة من ١ إلى ٤٠ حرفًا.");
+      throw new GameError(400, "اكتب خدعة من 1 إلى 40 حرفًا.");
     }
     if (Object.hasOwn(room.fakes, player.id)) return false;
     if (answerKey(text) === answerKey(room.question.correct)) {
@@ -425,7 +433,7 @@ function applyAction(room, player, action, input, now) {
     }
     const text = input.text.trim().replace(/\s+/gu, " ");
     if (!text || [...text].length > 240 || /[\p{Cc}\u202a-\u202e\u2066-\u2069]/u.test(text)) {
-      throw new GameError(400, "اكتب رسالة من ١ إلى ٢٤٠ حرفًا.");
+      throw new GameError(400, "اكتب رسالة من 1 إلى 240 حرفًا.");
     }
     room.chat ??= [];
     if (room.chat.some((entry) => entry.id === input.id && entry.playerId === player.id)) return false;
