@@ -34,7 +34,8 @@ a { color: inherit; }
     radial-gradient(800px 600px at 100% 100%, rgba(226, 99, 43, .08), transparent 70%),
     radial-gradient(700px 500px at 0% 80%, rgba(43, 179, 160, .07), transparent 70%),
     var(--night); }
-.sky canvas { width: 100%; height: 100%; display: block; }
+.sky { overflow: hidden; }
+.sky canvas { width: 100%; display: block; animation: twinkle 7s ease-in-out infinite alternate; }
 .wrap { position: relative; z-index: 1; max-width: 1240px; margin: 0 auto;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 
@@ -45,7 +46,7 @@ a { color: inherit; }
 .eyebrow bdi { letter-spacing: .08em; }
 h1 { margin: 0; font: 700 clamp(58px, 13vw, 132px)/1.05 var(--calligraphy); text-wrap: balance;
   background: linear-gradient(180deg, #fff3c9 8%, #f0c25e 52%, #a8711f 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 6px 26px rgba(240, 194, 94, .22)); padding-block: .08em; }
+  padding-block: .08em; }
 .lede { margin: 2px 0 0; max-width: 34ch; color: var(--muted); font-size: clamp(16px, 2.2vw, 19px); text-wrap: balance; }
 .flourish { width: min(320px, 70%); height: 14px; margin-top: 14px; color: var(--gold); opacity: .7; }
 
@@ -68,6 +69,7 @@ h1 { margin: 0; font: 700 clamp(58px, 13vw, 132px)/1.05 var(--calligraphy); text
   .door:hover .scene { transform: scale(1.06); }
   .door:hover .go span { transform: translateX(-6px); }
 }
+.door.away .scene *, .door.away .scene { animation-play-state: paused !important; }
 .scene { position: absolute; inset: 0; z-index: -1; transition: transform 1.2s cubic-bezier(.2, .8, .2, 1); }
 .scene::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 30%, rgba(5, 6, 12, .55) 58%, rgba(5, 6, 12, .96) 86%); }
 .emblem { margin: 56px auto 0; width: 118px; height: 118px; display: grid; place-items: center; position: relative; z-index: 1; }
@@ -78,7 +80,7 @@ h1 { margin: 0; font: 700 clamp(58px, 13vw, 132px)/1.05 var(--calligraphy); text
 .door p { margin: 0; color: #d9d2c0; font-size: 16px; line-height: 1.65; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; padding: 0; list-style: none; }
 .chips li { padding: 4px 11px; border-radius: 99px; font-size: 13px; font-weight: 700; color: #fff;
-  background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .14); backdrop-filter: blur(6px); }
+  background: rgba(10, 10, 18, .55); border: 1px solid rgba(255, 255, 255, .14); }
 .go { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; padding: 14px 20px;
   border-radius: 14px; font: 800 17px/1 var(--body); color: var(--on-accent); background: var(--accent-grad); box-shadow: 0 12px 30px -12px var(--glow); }
 .go span { transition: transform .35s; font-size: 20px; }
@@ -90,7 +92,7 @@ h1 { margin: 0; font: 700 clamp(58px, 13vw, 132px)/1.05 var(--calligraphy); text
 .d-tatakuf h2 { font-family: var(--kufi); font-weight: 700; }
 .d-tatakuf .scene { background: radial-gradient(420px 360px at 50% 18%, #2a3a82, transparent 70%), linear-gradient(180deg, #121b45, #0a0f2a); }
 .tile { position: absolute; top: -60px; width: 54px; height: 54px; border-radius: 14px; display: grid; place-items: center;
-  font: 800 24px/1 var(--kufi); color: #101634; opacity: .9; animation: drop linear infinite; box-shadow: 0 10px 20px -8px rgba(0, 0, 0, .6); }
+  font: 800 24px/1 var(--kufi); color: #101634; opacity: .9; animation: drop linear infinite; will-change: transform, opacity; box-shadow: 0 10px 20px -8px rgba(0, 0, 0, .6); }
 .tile.a { left: 10%; background: #f2c15a; animation-duration: 9s; animation-delay: -2s; }
 .tile.b { left: 34%; background: #3dd6c6; animation-duration: 11s; animation-delay: -7s; width: 46px; height: 46px; }
 .tile.c { left: 62%; background: #b48cff; animation-duration: 10s; animation-delay: -4s; }
@@ -104,7 +106,7 @@ h1 { margin: 0; font: 700 clamp(58px, 13vw, 132px)/1.05 var(--calligraphy); text
     radial-gradient(360px 300px at 50% 20%, rgba(138, 35, 50, .75), transparent 70%),
     repeating-conic-gradient(from 45deg at 50% 50%, rgba(15, 76, 79, .55) 0 25%, rgba(28, 17, 12, .2) 0 50%) 0 0 / 46px 46px,
     linear-gradient(180deg, #2a1912, #140b08); }
-.beam { position: absolute; inset: -20% -40%; background: conic-gradient(from 200deg at 50% 0%, transparent 0 40%, rgba(255, 220, 160, .16) 46%, transparent 52%);
+.beam { position: absolute; inset: -10% -30%; will-change: transform; background: conic-gradient(from 200deg at 50% 0%, transparent 0 40%, rgba(255, 220, 160, .16) 46%, transparent 52%);
   animation: sweep 7s ease-in-out infinite alternate; }
 .crew { position: absolute; inset-inline: 0; top: 196px; display: flex; justify-content: center; gap: 10px; }
 .crew i { width: 22px; height: 30px; border-radius: 11px 11px 6px 6px; background: #efe2c6; opacity: .78; position: relative; }
@@ -119,8 +121,8 @@ h1 { margin: 0; font: 700 clamp(58px, 13vw, 132px)/1.05 var(--calligraphy); text
     radial-gradient(520px 260px at 50% 100%, rgba(226, 99, 43, .6), transparent 70%),
     radial-gradient(300px 240px at 50% 22%, rgba(242, 162, 58, .3), transparent 70%),
     linear-gradient(180deg, #141829, #1d1016 60%, #2a0f08); }
-.ember { position: absolute; bottom: -10px; width: 5px; height: 5px; border-radius: 50%; background: #ffcf7a;
-  box-shadow: 0 0 10px 3px rgba(242, 130, 50, .8); animation: ember linear infinite; }
+.ember { position: absolute; bottom: -10px; width: 12px; height: 12px; border-radius: 50%; will-change: transform, opacity;
+  background: radial-gradient(circle, #ffe2a0 0 18%, rgba(242, 130, 50, .7) 32%, transparent 70%); animation: ember linear infinite; }
 .ridge { position: absolute; inset-inline: 0; bottom: 38%; height: 80px; background: #0c0a12;
   clip-path: polygon(0 100%, 0 60%, 12% 35%, 22% 55%, 34% 20%, 46% 50%, 58% 28%, 70% 58%, 82% 30%, 92% 50%, 100% 38%, 100% 100%); opacity: .9; }
 
@@ -131,6 +133,7 @@ footer { text-align: center; padding-block: 26px calc(30px + env(safe-area-inset
 footer strong { color: var(--gold); font-weight: 800; }
 
 @keyframes rise { from { opacity: .001; transform: translateY(40px) rotateX(8deg); } }
+@keyframes twinkle { from { opacity: .75; } to { opacity: 1; } }
 @keyframes float { 50% { transform: translateY(-6px); } }
 @keyframes drop { from { transform: translateY(0) rotate(-12deg); opacity: 0; } 15% { opacity: .9; } 70% { opacity: .9; } to { transform: translateY(300px) rotate(28deg); opacity: 0; } }
 @keyframes sweep { from { transform: rotate(-24deg); } to { transform: rotate(24deg); } }
@@ -210,40 +213,43 @@ footer strong { color: var(--gold); font-weight: 800; }
 
   // Embers for the arena door.
   const embers = document.querySelector(".embers");
-  for (let index = 0; index < 22; index += 1) {
+  for (let index = 0; index < 14; index += 1) {
     const ember = document.createElement("i");
     ember.className = "ember";
     ember.style.left = `${Math.random() * 100}%`;
     ember.style.setProperty("--dx", `${(Math.random() - .5) * 120}px`);
     ember.style.animationDuration = `${4 + Math.random() * 5}s`;
     ember.style.animationDelay = `${-Math.random() * 8}s`;
-    const size = 2 + Math.random() * 4;
+    const size = 8 + Math.random() * 8;
     ember.style.width = ember.style.height = `${size}px`;
     embers.append(ember);
   }
 
-  // A slow starfield behind everything.
+  // The starfield is drawn once. Phones resize the viewport while scrolling (the address bar
+  // slides away), so only a change of width redraws it, and the canvas is sized to the screen.
   const canvas = document.querySelector("#stars");
   const ctx = canvas.getContext("2d");
-  let stars = [];
-  function resize() {
+  let drawnWidth = 0;
+  function drawStars() {
+    if (innerWidth === drawnWidth) return;
+    drawnWidth = innerWidth;
     const ratio = Math.min(devicePixelRatio || 1, 2);
-    canvas.width = innerWidth * ratio; canvas.height = innerHeight * ratio;
+    const height = Math.max(innerHeight, screen.height || 0);
+    canvas.width = innerWidth * ratio; canvas.height = height * ratio;
+    canvas.style.height = `${height}px`;
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    stars = Array.from({ length: Math.round(innerWidth * innerHeight / 9000) }, () => ({
-      x: Math.random() * innerWidth, y: Math.random() * innerHeight, r: Math.random() * 1.3 + .2, p: Math.random() * Math.PI * 2, s: .4 + Math.random()
-    }));
-  }
-  function draw(time) {
-    ctx.clearRect(0, 0, innerWidth, innerHeight);
-    for (const star of stars) {
-      const alpha = .25 + .45 * (still ? .6 : (Math.sin(time / 1000 * star.s + star.p) + 1) / 2);
-      ctx.fillStyle = `rgba(255, 236, 190, ${alpha})`;
-      ctx.beginPath(); ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2); ctx.fill();
+    for (let index = Math.round(innerWidth * height / 9000); index > 0; index -= 1) {
+      ctx.fillStyle = `rgba(255, 236, 190, ${.2 + Math.random() * .55})`;
+      ctx.beginPath(); ctx.arc(Math.random() * innerWidth, Math.random() * height, Math.random() * 1.3 + .2, 0, Math.PI * 2); ctx.fill();
     }
-    if (!still) requestAnimationFrame(draw);
   }
-  resize(); addEventListener("resize", resize); requestAnimationFrame(draw);
+  drawStars(); addEventListener("resize", drawStars);
+
+  // Pause each door's scene while it is off screen.
+  const watcher = new IntersectionObserver((entries) => {
+    for (const entry of entries) entry.target.classList.toggle("away", !entry.isIntersecting);
+  });
+  for (const door of document.querySelectorAll(".door")) watcher.observe(door);
 
   // Doors lean toward the pointer on devices that hover.
   if (!still && matchMedia("(hover: hover)").matches) {
