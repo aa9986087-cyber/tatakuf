@@ -1,14 +1,13 @@
 const codeAlphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 const day = 86_400_000;
-const categoryTime = 15_000;
+const categoryTime = 60_000;
 const maxPlayers = 15;
-// The reveal shows the coloured answers with names first, then the leaderboard. The last round shows
-// the answers too, then goes to the finale instead of the leaderboard.
-const revealAnswersTime = { classic: 7_000, bluff: 10_000 };
-const revealBoardTime = 5_000;
+// The reveal lasts 12 seconds: coloured answers with names for 7, then the leaderboard for 5. The last
+// round shows the answers for all 12, then goes to the finale instead of the leaderboard.
+const revealTime = 12_000;
 const finaleTime = 5_500;
 const botTurnTime = 2_200;
-const writeExtraTime = 15_000;
+const writeTime = 60_000;
 const formats = ["classic", "bluff"];
 const modes = ["screen", "online", "bots"];
 const botNames = ["برق", "نجم", "لمعة", "صقر", "رعد", "شعلة", "وميض"];
@@ -81,7 +80,7 @@ function seatLegacyDisplay(room, input) {
 function getSettings(input) {
   const { rounds, seconds, categories } = input;
   const format = input.format ?? "classic";
-  if (!formats.includes(format) || !Number.isInteger(rounds) || rounds < 1 || rounds > 30 || ![15, 20, 30].includes(seconds) ||
+  if (!formats.includes(format) || !Number.isInteger(rounds) || rounds < 1 || rounds > 30 || ![15, 20, 30, 45, 60].includes(seconds) ||
       !Array.isArray(categories) || !categories.length || categories.length > Object.keys(bankFor(format)).length ||
       new Set(categories).size !== categories.length ||
       categories.some((id) => typeof id !== "string" || !Object.hasOwn(bankFor(format), id))) {
@@ -181,7 +180,7 @@ function startQuestion(room, category, now, pickedBy = null) {
   if (isBluff(room)) {
     room.question = { id, category, pickedBy, prompt, image, correct, decoys: shuffled([second, third, fourth]) };
     room.phase = "write";
-    room.deadline = now + room.settings.seconds * 1000 + writeExtraTime;
+    room.deadline = now + writeTime;
     room.answers = {};
     room.fakes = {};
     room.botAnswers = room.players.filter((player) => player.bot).map((player, index) => ({
@@ -262,8 +261,7 @@ function reveal(room, now) {
 }
 
 function revealDuration(room) {
-  const answers = revealAnswersTime[room.settings.format ?? "classic"] ?? revealAnswersTime.classic;
-  return answers + (room.round === room.settings.rounds ? 0 : revealBoardTime);
+  return revealTime;
 }
 
 function advanceByClock(room, now) {

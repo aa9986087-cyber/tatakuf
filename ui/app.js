@@ -226,7 +226,7 @@ function openCreate(mode) {
         <label class="format-option"><input type="radio" name="format" value="${id}" ${id === "classic" ? "checked" : ""}>
           <strong>${item.title}</strong><span>${item.description}</span></label>`).join("")}</fieldset>
       ${roundsPicker(5)}
-      ${chips("seconds", "وقت الإجابة", [["15", "15 ث"], ["20", "20 ث"], ["30", "30 ث"]], "20")}
+      ${chips("seconds", "وقت الإجابة", [["30", "30 ث"], ["45", "45 ث"], ["60", "دقيقة"]], "60")}
       <fieldset class="category-picker"><legend>الفئات <button type="button" class="link-button" data-action="toggle-categories">إلغاء الكل</button></legend>
         <div class="check-grid">${Object.entries(categories).filter(([id]) => bankCounts[id]).map(([id, item]) =>
         `<label class="check-category cat-${id}"><input type="checkbox" name="category" value="${id}" checked>
@@ -357,23 +357,22 @@ function lobby() {
 }
 
 // The reveal has two stages: coloured answers with names, then the leaderboard.
-const revealAnswersTime = { classic: 7000, bluff: 10000 };
+const revealAnswersTime = 7000;
 const isFinalRound = () => room.round === room.settings.rounds;
 let renderedReveal = null;
 function revealStage() {
   if (room?.phase !== "reveal" || room.deadline == null) return null;
-  const kind = room.settings.format ?? "classic";
   const start = room.deadline - phaseDuration();
   if (isFinalRound()) return "answers";
-  return Date.now() + clockOffset - start < revealAnswersTime[kind] ? "answers" : "board";
+  return Date.now() + clockOffset - start < revealAnswersTime ? "answers" : "board";
 }
 
 function phaseDuration() {
   const chooser = room.players.find((player) => player.id === room.chooserId);
   return room.phase === "finale" ? 5500 : room.phase === "reveal"
-    ? revealAnswersTime[room.settings.format ?? "classic"] + (isFinalRound() ? 0 : 5000)
-    : room.phase === "select" ? (chooser?.bot ? 2200 : 15000)
-    : room.phase === "write" ? room.settings.seconds * 1000 + 15000 : room.settings.seconds * 1000;
+    ? 12000
+    : room.phase === "select" ? (chooser?.bot ? 2200 : 60000)
+    : room.phase === "write" ? 60000 : room.settings.seconds * 1000;
 }
 
 // The bar is one continuous CSS animation from where the clock is now down to zero, so re-rendering

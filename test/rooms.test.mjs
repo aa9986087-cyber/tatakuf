@@ -70,7 +70,7 @@ test("two independent players complete a match and rematch with fresh questions"
       assert.equal(revealed.question.correctIndex, option);
       assert.deepEqual(revealed.question.voters[option], ["ناصر", "محمد"]);
       assert.equal(revealed.players.some((player) => Object.hasOwn(player, "score")), false);
-      t.mock.timers.tick(6999);
+      t.mock.timers.tick(11_999);
       assert.equal((await host()).data.room.phase, "reveal");
       t.mock.timers.tick(1);
       const suspense = (await host()).data.room;
@@ -147,7 +147,7 @@ test("a 20-round match samples only unseen questions and refuses a repeat after 
   assert.equal((await host("/start", {})).data.room.phase, "select");
   const observed = new Set();
   for (let round = 1; round <= 20; round += 1) {
-    t.mock.timers.tick(15_000);
+    t.mock.timers.tick(60_000);
     const state = (await host()).data.room;
     assert.equal(state.phase, "question");
     assert.equal(state.round, round);
@@ -156,7 +156,7 @@ test("a 20-round match samples only unseen questions and refuses a repeat after 
     assert.equal(observed.has(state.question.id), false);
     assert.equal(state.seenQuestions.length, round);
     observed.add(state.question.id);
-    t.mock.timers.tick(15_000 + (round === 20 ? 7000 + 5500 : 12000));
+    t.mock.timers.tick(15_000 + (round === 20 ? 12_000 + 5500 : 12_000));
   }
   assert.equal(observed.size, 20);
   assert.equal((await host()).data.room.phase, "finished");
@@ -293,7 +293,7 @@ test("category selection and answers expire on server time without awarding miss
   t.mock.timers.enable({ apis: ["Date"], now: 100_000 });
   const { host, guest } = await setup(t, 15);
   const started = (await host("/start", {})).data.room;
-  t.mock.timers.tick(15_000);
+  t.mock.timers.tick(60_000);
   const selected = (await guest()).data.room;
   assert.equal(selected.phase, "question");
   assert.equal(selected.deadline, started.deadline + 15_000);
@@ -325,7 +325,7 @@ test("bluff rounds collect fakes, score fooled players and hide nothing until th
   const writing = (await host("/category", { round: 1, category: "science" })).data.room;
   assert.equal(writing.phase, "write");
   assert.equal(writing.question.options, undefined);
-  assert.equal(writing.deadline, 100_000 + 35_000);
+  assert.equal(writing.deadline, 100_000 + 60_000);
   const questionId = writing.question.id;
   assert.match(writing.question.id, /^bluff\.science-\d+$/);
   const correct = bluffBank.science.find((entry) => entry[0] === writing.question.prompt)[1];
@@ -386,7 +386,7 @@ test("bluff bots write fakes and vote on the server clock, and silent rounds sti
   const revealed = (await solo()).data.room;
   assert.equal(revealed.phase, "reveal");
   assert.equal(revealed.question.voters.flat().length, 2);
-  t.mock.timers.setTime(revealed.deadline + 2_200 + 30_000 + 15_000);
+  t.mock.timers.setTime(revealed.deadline + 2_200 + 60_000 + 15_000);
   assert.equal((await solo()).data.room.phase, "reveal");
 });
 
@@ -408,7 +408,7 @@ test("everyone sees who picked the category, or that the clock picked it", async
   await host("/start", {});
   await host("/category", { round: 1, category: "science" });
   assert.equal((await guest()).data.room.question.pickedBy, "ناصر");
-  t.mock.timers.tick(15_000 + 12_000 + 15_000);
+  t.mock.timers.tick(15_000 + 12_000 + 60_000);
   const timedOut = (await host()).data.room;
   assert.equal(timedOut.round, 2);
   assert.equal(timedOut.phase, "question");
@@ -453,7 +453,7 @@ test("any number of rounds from 1 to 30, and a one-round match goes straight to 
   await host("/answer", { questionId: question.id, option: 0 });
   const revealed = (await request(path + "/answer", { questionId: question.id, option: 1 }, guest.data.token)).data.room;
   assert.equal(revealed.phase, "reveal");
-  t.mock.timers.tick(7000);
+  t.mock.timers.tick(12_000);
   assert.equal((await host()).data.room.phase, "finale");
   t.mock.timers.tick(5500);
   assert.equal((await host()).data.room.phase, "finished");
