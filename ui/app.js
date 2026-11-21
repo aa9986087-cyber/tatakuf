@@ -329,7 +329,8 @@ function lobby() {
     : room.mode === "bots" ? "ابدأ المباراة وتناوب على اختيار الفئات مع البوتات."
     : room.mode === "screen" ? "خلّ الشاشة قدامك واستعد للإجابة من هنا."
     : "شارك الرابط مع ربعك. تقدرون تبدأون وأنتم لاعبين.";
-  return `<section class="panel room-invite${room.display ? " with-qr" : ""}">
+  return `<div class="lobby-crest"><img src="/logo.svg?v=2" width="520" height="494" alt="الرافعية × Vamos"></div>
+  <section class="panel room-invite${room.display ? " with-qr" : ""}">
     <div>
       <h2>${title}</h2><p>${hint}</p>
       <div class="actions">
