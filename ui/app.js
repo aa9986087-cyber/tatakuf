@@ -1065,7 +1065,10 @@ async function gameAction(action, button) {
     const data = await api(`/api/rooms/${roomCode}/${action}`, inputs[action]);
     pending = false;
     renderRoom(data.room, true);
-    if (action === "answer" && previous.phase === room.phase) playSound("locked");
+    if (action === "answer" && previous.phase === room.phase) {
+      playSound("locked");
+      app.querySelector(".option.selected")?.classList.add("just-picked");
+    }
   } catch (error) {
     pending = false;
     if (room) renderRoom(room, true);
