@@ -81,7 +81,7 @@ function seatLegacyDisplay(room, input) {
 function getSettings(input) {
   const { rounds, seconds, categories } = input;
   const format = input.format ?? "classic";
-  if (!formats.includes(format) || ![5, 10, 20].includes(rounds) || ![15, 20, 30].includes(seconds) ||
+  if (!formats.includes(format) || !Number.isInteger(rounds) || rounds < 1 || rounds > 30 || ![15, 20, 30].includes(seconds) ||
       !Array.isArray(categories) || !categories.length || categories.length > Object.keys(bankFor(format)).length ||
       new Set(categories).size !== categories.length ||
       categories.some((id) => typeof id !== "string" || !Object.hasOwn(bankFor(format), id))) {

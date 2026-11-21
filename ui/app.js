@@ -169,6 +169,39 @@ function openDialog(title, description, html) {
   dialog.querySelector("input:not([type=checkbox])")?.focus();
 }
 
+// Arabic counting: جولة واحدة، جولتان، 3 جولات … 10 جولات، 11 جولة …
+function roundsLabel(count) {
+  if (count === 1) return "جولة واحدة";
+  if (count === 2) return "جولتان";
+  return `${format(count)} ${count <= 10 ? "جولات" : "جولة"}`;
+}
+
+// Any number of rounds from 1 to 30: a gold slider with − / + and quick picks.
+function roundsPicker(value = 5) {
+  return `<fieldset class="rounds-picker"><legend>عدد الجولات <output data-rounds-out>${roundsLabel(value)}</output></legend>
+    <div class="rounds-control">
+      <button type="button" class="rounds-step" data-action="rounds-step" data-step="-1" aria-label="أنقص جولة">−</button>
+      <input type="range" name="rounds" min="1" max="30" step="1" value="${value}" aria-label="عدد الجولات" style="--fill:${(value - 1) / 29 * 100}%">
+      <button type="button" class="rounds-step" data-action="rounds-step" data-step="1" aria-label="زد جولة">+</button>
+    </div>
+    <div class="rounds-quick">${[5, 10, 15, 20, 30].map((count) =>
+      `<button type="button" class="${count === value ? "active" : ""}" data-action="rounds-set" data-rounds="${count}">${format(count)}</button>`).join("")}</div>
+  </fieldset>`;
+}
+
+function setRounds(form, value) {
+  const input = form.elements.rounds;
+  input.value = String(Math.min(30, Math.max(1, value)));
+  updateRounds(input);
+}
+
+function updateRounds(input) {
+  const count = Number(input.value);
+  input.style.setProperty("--fill", `${(count - 1) / 29 * 100}%`);
+  input.form.querySelector("[data-rounds-out]").textContent = roundsLabel(count);
+  for (const quick of input.form.querySelectorAll("[data-action=rounds-set]")) quick.classList.toggle("active", Number(quick.dataset.rounds) === count);
+}
+
 // Segmented gold chips replace native dropdowns; they are plain radios, so FormData still reads them.
 function chips(name, label, options, selected) {
   return `<fieldset class="chip-group"><legend>${label}</legend><div class="chips">${options.map(([value, text, hint]) =>
@@ -188,7 +221,7 @@ function openCreate(mode) {
       <fieldset class="format-picker"><legend>طريقة الأسئلة</legend>${Object.entries(formats).map(([id, item]) => `
         <label class="format-option"><input type="radio" name="format" value="${id}" ${id === "classic" ? "checked" : ""}>
           <strong>${item.title}</strong><span>${item.description}</span></label>`).join("")}</fieldset>
-      ${chips("rounds", "عدد الجولات", [["5", "5", "سريعة"], ["10", "10", "متوسطة"], ["20", "20", "طويلة"]], "5")}
+      ${roundsPicker(5)}
       ${chips("seconds", "وقت الإجابة", [["15", "15 ث"], ["20", "20 ث"], ["30", "30 ث"]], "20")}
       <fieldset class="category-picker"><legend>الفئات <button type="button" class="link-button" data-action="toggle-categories">إلغاء الكل</button></legend>
         <div class="check-grid">${Object.entries(categories).filter(([id]) => bankCounts[id]).map(([id, item]) =>
@@ -311,7 +344,7 @@ function lobby() {
     ${room.display ? `<figure class="qr-block"><canvas data-room-qr aria-label="رمز QR للانضمام"></canvas><figcaption>${e(room.code)}</figcaption></figure>` : ""}
   </section>
   <section class="panel"><h2>اللاعبون <span class="muted">(${format(count)}/15)</span></h2>
-    <div class="settings-line"><span>${formats[settings.format ?? "classic"].title}</span><span>${format(settings.rounds)} جولات</span><span>${format(settings.seconds)} ثانية للسؤال</span>
+    <div class="settings-line"><span>${formats[settings.format ?? "classic"].title}</span><span>${roundsLabel(settings.rounds)}</span><span>${format(settings.seconds)} ثانية للسؤال</span>
       ${room.mode === "bots" ? `<span>${{ easy:"سهل", normal:"متوسط", hard:"صعب" }[settings.difficulty]}</span>` : ""}</div>
     ${count ? playersList(room.players, false, false, room.display) : `<p class="muted">بانتظار أول لاعب.</p>`}
     ${!host ? `<p class="muted">تبدأ المباراة لما يكون الكل جاهز.</p>` : ""}
@@ -1065,6 +1098,7 @@ async function fullscreen() {
 document.addEventListener("pointerdown", unlockSound, { passive: true });
 document.addEventListener("keydown", unlockSound);
 document.addEventListener("input", (event) => {
+  if (event.target.name === "rounds" && event.target.type === "range") { updateRounds(event.target); return; }
   if (event.target.name !== "fake" || !fakeError) return;
   fakeError = "";
   event.target.classList.remove("shake");
@@ -1096,6 +1130,8 @@ document.addEventListener("click", (event) => {
   else if (action === "fullscreen") void fullscreen();
   else if (action === "retry") void sync();
   else if (action === "zoom") openZoom();
+  else if (action === "rounds-step") setRounds(button.form, Number(button.form.elements.rounds.value) + Number(button.dataset.step));
+  else if (action === "rounds-set") setRounds(button.form, Number(button.dataset.rounds));
   else if (action === "chat-toggle") toggleChat();
   else if (action === "toggle-categories") {
     const form = button.closest("form");

@@ -436,3 +436,25 @@ test("a room takes up to fifteen players", async (t) => {
   assert.equal(full.status, 409);
   assert.equal(full.data.error, "الغرفة ممتلئة.");
 });
+
+test("any number of rounds from 1 to 30, and a one-round match goes straight to the champion", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 100_000 });
+  const { request } = await setup(t);
+  const make = (rounds) => request("", { name: "سالم", rounds, seconds: 15, categories: ["general"] });
+  for (const rounds of [0, 31, 2.5, "10"]) assert.equal((await make(rounds)).status, 400);
+  assert.equal((await make(30)).status, 201);
+  const created = await make(1);
+  assert.equal(created.status, 201);
+  const path = `/${created.data.room.code}`;
+  const host = (action = "", body) => request(path + action, body, created.data.token);
+  const guest = await request(path + "/join", { name: "فهد" });
+  await host("/start", {});
+  const question = (await host("/category", { round: 1, category: "general" })).data.room.question;
+  await host("/answer", { questionId: question.id, option: 0 });
+  const revealed = (await request(path + "/answer", { questionId: question.id, option: 1 }, guest.data.token)).data.room;
+  assert.equal(revealed.phase, "reveal");
+  t.mock.timers.tick(7000);
+  assert.equal((await host()).data.room.phase, "finale");
+  t.mock.timers.tick(5500);
+  assert.equal((await host()).data.room.phase, "finished");
+});
