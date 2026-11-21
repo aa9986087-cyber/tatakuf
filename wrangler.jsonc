@@ -7,6 +7,8 @@
   "workers_dev": true,
   "preview_urls": false,
   // `wrangler deploy` and `wrangler dev` run the build first.
+  // Question photos are static assets; anything that is not a file falls through to the worker.
+  "assets": { "directory": "dist/public" },
   "build": { "command": "npm run build", "watch_dir": ["ui", "worker", "scripts"] },
   "d1_databases": [
     {

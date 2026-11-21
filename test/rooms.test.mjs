@@ -124,10 +124,9 @@ test("the bank contains thousands of unique questions and displays illustrated q
   assert.deepEqual(phone.data.room.question.image, screenImage);
   assert.equal(phone.data.room.question.prompt, (await display()).data.room.question.prompt);
   assert.ok(screenImage.alt);
-  const asset = await worker.fetch(new Request(`https://quiz.example/questions/${screenImage.file}`), {});
-  assert.equal(asset.status, 200);
-  assert.equal(asset.headers.get("content-type"), "image/webp");
-  assert.ok((await asset.arrayBuffer()).byteLength > 1000);
+  // Photos ship as static assets next to the worker, not inside it.
+  const asset = await readFile(`dist/public/questions/${screenImage.file}`);
+  assert.ok(asset.byteLength > 1000);
 });
 
 test("a 20-round match samples only unseen questions and refuses a repeat after exhaustion", async (t) => {

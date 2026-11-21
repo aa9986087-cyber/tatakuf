@@ -43,6 +43,16 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
         headers: incoming.headers,
         ...(method === "GET" || method === "HEAD" ? {} : { body: incoming, duplex: "half" })
       });
+      // Static assets (question photos) are served first, like Cloudflare does in production.
+      const photo = new URL(request.url).pathname.match(/^\/questions\/([a-z0-9-]+\.webp)$/);
+      if (photo && method === "GET") {
+        try {
+          const bytes = await readFile(`dist/public/questions/${photo[1]}`);
+          outgoing.writeHead(200, { "Content-Type": "image/webp", "Cache-Control": "public, max-age=86400" });
+          outgoing.end(bytes);
+          return;
+        } catch { /* Not a static photo; the worker answers. */ }
+      }
       const result = await worker.fetch(request, { DB: db });
       outgoing.writeHead(result.status, Object.fromEntries(result.headers));
       outgoing.end(method === "HEAD" ? undefined : Buffer.from(await result.arrayBuffer()));

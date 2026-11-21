@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, copyFile, rm } from "node:fs/promises";
 
 // Checks a question bank: at least 10 per category, four distinct options, unique prompts
 // (a shared prompt is fine when the picture differs, e.g. flags) and valid picture references.
@@ -46,9 +46,26 @@ export async function build() {
     mkdir("dist/.openai", { recursive: true }),
     mkdir("dist/drizzle", { recursive: true })
   ]);
-  const questionImages = Object.fromEntries(await Promise.all([...imageFiles].map(async (file) =>
+  // Drawings (SVG) are small and ride inside the worker. Photos would outgrow the worker size limit,
+  // so they ship as Workers static assets from dist/public, served before the worker runs.
+  const questionImages = Object.fromEntries(await Promise.all([...imageFiles].filter((file) => file.endsWith(".svg")).map(async (file) =>
     [file, (await readFile(`ui/questions/${file}`)).toString("base64")]
   )));
+  await rm("dist/public", { recursive: true, force: true });
+  await mkdir("dist/public/questions", { recursive: true });
+  await Promise.all([...imageFiles].filter((file) => !file.endsWith(".svg")).map((file) =>
+    copyFile(`ui/questions/${file}`, `dist/public/questions/${file}`)));
+  // The photos are from Wikimedia Commons; their licences ask for credit, so list each one.
+  const credits = JSON.parse(await readFile("ui/questions/credits.json", "utf8"));
+  const escape = (value) => String(value).replace(/[&<>"]/g, (character) => `&#${character.charCodeAt(0)};`);
+  await writeFile("dist/public/credits.html", `<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>مصادر الصور</title>
+<style>body{margin:0;padding:24px 16px;background:#080e22;color:#f4ead0;font:16px/1.7 system-ui,sans-serif}main{max-width:760px;margin:auto}
+h1{color:#e7c56f}li{margin-bottom:8px}a{color:#e7c56f}small{color:#a9b2cf}</style>
+<main><h1>مصادر صور الأسئلة</h1><p>صور الحيوانات والشخصيات من ويكيميديا كومنز، وكل صورة بترخيصها واسم صاحبها.</p>
+<ol>${credits.map((entry) => `<li><a href="${escape(entry.source)}">${escape(entry.source.split("File:")[1].replace(/_/g, " "))}</a><br><small dir="auto">${escape(entry.artist)} · ${escape(entry.license)}</small></li>`).join("")}</ol>
+<p><a href="/">العودة للعبة</a></p></main></html>`);
+  await writeFile("dist/public/_headers", "/questions/*\n  Cache-Control: public, max-age=86400\n");
   const counts = Object.fromEntries([
     ...Object.entries(questions).map(([id, items]) => [id, items.length]),
     ...Object.entries(bluffQuestions).map(([id, items]) => ["bluff." + id, items.length])
