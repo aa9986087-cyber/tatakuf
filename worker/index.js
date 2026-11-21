@@ -1,4 +1,4 @@
-const codeAlphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+const codeAlphabet = "0123456789"; // room codes are six digits
 const day = 86_400_000;
 const categoryTime = 60_000;
 const maxPlayers = 15;
@@ -600,7 +600,7 @@ async function handleApi(request, pathname, db) {
     return json(await createRoom(db, await readInput(request)), 201);
   }
 
-  const match = pathname.match(/^\/api\/rooms\/([23456789A-HJ-NP-Z]{6})(?:\/(invite|join|start|category|fake|answer|chat|rematch|kick))?$/);
+  const match = pathname.match(/^\/api\/rooms\/([0-9]{6})(?:\/(invite|join|start|category|fake|answer|chat|rematch|kick))?$/);
   if (!match) throw new GameError(404, "الطلب غير موجود.");
   const [, code, action] = match;
   const token = request.headers.get("Authorization")?.match(/^Bearer ([0-9a-f-]{36})$/i)?.[1];
@@ -644,7 +644,7 @@ export default {
         });
       }
       if (pathname === "/favicon.ico") return new Response(null, { status: 204 });
-      if (pathname === "/" || /^\/room\/[23456789A-HJ-NP-Z]{6}\/?$/i.test(pathname)) {
+      if (pathname === "/" || /^\/room\/[0-9]{6}\/?$/.test(pathname)) {
         return response(assets.html, "text/html; charset=utf-8", {
           "Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
         });

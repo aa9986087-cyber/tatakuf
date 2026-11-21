@@ -38,7 +38,9 @@ const dialogContent = document.querySelector("#dialog-content");
 const toast = document.querySelector("#toast");
 const number = new Intl.NumberFormat("en-US", { useGrouping: false });
 const format = (value) => number.format(value);
-const codePattern = /^[23456789A-HJ-NP-Z]{6}$/;
+const codePattern = /^[0-9]{6}$/; // room codes are six digits
+// Digits typed on an Arabic keyboard (٠-٩, ۰-۹) count as the same code.
+const asciiDigits = (value) => String(value ?? "").replace(/[\u0660-\u0669]/g, (d) => d.charCodeAt(0) - 0x0660).replace(/[\u06f0-\u06f9]/g, (d) => d.charCodeAt(0) - 0x06f0);
 const roomCode = window.location.pathname.split("/")[2]?.toUpperCase();
 const storageKey = `tahaddi-alrabaa:${roomCode}`;
 const historyKey = "tatakuf-question-history";
@@ -252,7 +254,7 @@ function openJoin() {
   openDialog("انضم برمز الغرفة", "أدخل الرمز اللي وصلك من المضيف.", `
     <form class="setup-form" data-form="join-code">
       <label class="field">رمز الغرفة<input class="code-input" name="code" required minlength="6" maxlength="6"
-        autocapitalize="characters" autocomplete="off" placeholder="XM42KA" dir="ltr"></label>
+        inputmode="numeric" pattern="[0-9٠-٩۰-۹]*" autocomplete="off" placeholder="123456" dir="ltr"></label>
       <p class="error" data-error role="alert"></p>
       <button class="btn primary" type="submit">متابعة</button>
     </form>`);
@@ -1331,8 +1333,8 @@ document.addEventListener("submit", async (event) => {
   const errorElement = form.querySelector("[data-error]");
   errorElement.textContent = "";
   if (kind === "join-code") {
-    const code = data.get("code").trim().toUpperCase();
-    if (!codePattern.test(code)) errorElement.textContent = "اكتب رمز الغرفة المكوّن من 6 خانات.";
+    const code = asciiDigits(data.get("code")).replace(/\D/g, "");
+    if (!codePattern.test(code)) errorElement.textContent = "اكتب رمز الغرفة المكوّن من 6 أرقام.";
     else window.location.assign(`/room/${code}`);
     return;
   }
