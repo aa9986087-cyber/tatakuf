@@ -1,0 +1,11 @@
+// The games hub: one static page that links to every game. Deployed as its own Worker,
+// separate from the games, so it never touches their links, rooms or saved progress.
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "vamos",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "build": { "command": "node build.mjs" },
+  "assets": { "directory": "public" }
+}

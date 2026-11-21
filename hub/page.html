@@ -1,0 +1,275 @@
+<title>مجلس الألعاب</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="ألعاب الرافعية × Vamos: التكاتف، الدخيل، ساحة الرماد. كلها مجانية وتشتغل من المتصفح.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@700&family=Lalezar&family=Reem+Kufi:wght@500;700&family=Tajawal:wght@400;500;700;800&display=swap">
+<style>
+/* Layout: a night majlis. One calligraphic crest on top, then three tall "doors", each a window into
+   its own game's world (its palette, its typeface, its moving scene). Single dark look by design. */
+:root {
+  --night: #070912;
+  --night-2: #0d1120;
+  --ink: #f4ead6;
+  --muted: #a9a593;
+  --gold: #f0c25e;
+  --gold-deep: #b8812a;
+  --line: rgba(240, 194, 94, .28);
+  --calligraphy: "Aref Ruqaa", "Reem Kufi", serif;
+  --kufi: "Reem Kufi", "Tajawal", sans-serif;
+  --arena: "Lalezar", "Tajawal", sans-serif;
+  --body: "Tajawal", "Segoe UI", Tahoma, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { background: var(--night); }
+body {
+  margin: 0; min-height: 100%; background: var(--night); color: var(--ink);
+  font: 500 17px/1.7 var(--body); -webkit-font-smoothing: antialiased; overflow-x: hidden;
+}
+a { color: inherit; }
+.sky { position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(1200px 520px at 50% -140px, rgba(240, 194, 94, .16), transparent 70%),
+    radial-gradient(800px 600px at 100% 100%, rgba(226, 99, 43, .08), transparent 70%),
+    radial-gradient(700px 500px at 0% 80%, rgba(43, 179, 160, .07), transparent 70%),
+    var(--night); }
+.sky canvas { width: 100%; height: 100%; display: block; }
+.wrap { position: relative; z-index: 1; max-width: 1240px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* Crest */
+.crest { display: grid; justify-items: center; text-align: center; gap: 6px; padding-block: clamp(36px, 8vw, 84px) clamp(28px, 5vw, 52px); }
+.crest-mark { width: 74px; height: auto; filter: drop-shadow(0 10px 30px rgba(240, 194, 94, .35)); animation: float 6s ease-in-out infinite; }
+.eyebrow { margin: 10px 0 0; font: 700 13px/1 var(--body); letter-spacing: .22em; color: var(--gold); }
+.eyebrow bdi { letter-spacing: .08em; }
+h1 { margin: 0; font: 700 clamp(58px, 13vw, 132px)/1.05 var(--calligraphy); text-wrap: balance;
+  background: linear-gradient(180deg, #fff3c9 8%, #f0c25e 52%, #a8711f 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 6px 26px rgba(240, 194, 94, .22)); padding-block: .08em; }
+.lede { margin: 2px 0 0; max-width: 34ch; color: var(--muted); font-size: clamp(16px, 2.2vw, 19px); text-wrap: balance; }
+.flourish { width: min(320px, 70%); height: 14px; margin-top: 14px; color: var(--gold); opacity: .7; }
+
+/* Doors */
+.doors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(14px, 2vw, 24px); padding-bottom: 40px; perspective: 1400px; }
+.door {
+  --rx: 0deg; --ry: 0deg; --glow: rgba(240, 194, 94, .45);
+  position: relative; display: flex; flex-direction: column; min-height: 560px; min-width: 0;
+  border-radius: 200px 200px 22px 22px; overflow: hidden; text-decoration: none; isolation: isolate;
+  border: 1px solid var(--line); background: var(--night-2);
+  transform: rotateX(var(--rx)) rotateY(var(--ry)); transform-style: preserve-3d;
+  transition: transform .5s cubic-bezier(.2, .8, .2, 1), box-shadow .5s, border-color .5s;
+  box-shadow: 0 30px 60px -30px rgba(0, 0, 0, .9);
+  animation: rise .9s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i) * 140ms + 150ms);
+}
+.door::after { content: ""; position: absolute; inset: 7px; border-radius: 194px 194px 17px 17px; border: 1px solid rgba(255, 255, 255, .07); pointer-events: none; z-index: 3; }
+.door:focus-visible { outline: 3px solid var(--gold); outline-offset: 4px; }
+@media (hover: hover) {
+  .door:hover { box-shadow: 0 40px 80px -30px var(--glow), 0 0 0 1px var(--glow); border-color: var(--glow); }
+  .door:hover .scene { transform: scale(1.06); }
+  .door:hover .go span { transform: translateX(-6px); }
+}
+.scene { position: absolute; inset: 0; z-index: -1; transition: transform 1.2s cubic-bezier(.2, .8, .2, 1); }
+.scene::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 30%, rgba(5, 6, 12, .55) 58%, rgba(5, 6, 12, .96) 86%); }
+.emblem { margin: 56px auto 0; width: 118px; height: 118px; display: grid; place-items: center; position: relative; z-index: 1; }
+.emblem svg { width: 100%; height: 100%; filter: drop-shadow(0 14px 30px rgba(0, 0, 0, .55)); }
+.copy { margin-top: auto; padding: 0 26px 26px; display: grid; gap: 10px; position: relative; z-index: 2; }
+.kind { font: 700 12px/1 var(--body); letter-spacing: .18em; color: var(--accent); }
+.door h2 { margin: 0; font-size: clamp(40px, 4.4vw, 54px); line-height: 1.1; color: #fff; text-wrap: balance; }
+.door p { margin: 0; color: #d9d2c0; font-size: 16px; line-height: 1.65; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; padding: 0; list-style: none; }
+.chips li { padding: 4px 11px; border-radius: 99px; font-size: 13px; font-weight: 700; color: #fff;
+  background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .14); backdrop-filter: blur(6px); }
+.go { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; padding: 14px 20px;
+  border-radius: 14px; font: 800 17px/1 var(--body); color: var(--on-accent); background: var(--accent-grad); box-shadow: 0 12px 30px -12px var(--glow); }
+.go span { transition: transform .35s; font-size: 20px; }
+.last { position: absolute; top: 22px; inset-inline-start: 50%; transform: translateX(50%); z-index: 4; white-space: nowrap;
+  padding: 5px 12px; border-radius: 99px; font: 800 12px/1 var(--body); color: #1b1307; background: var(--gold); box-shadow: 0 6px 20px -6px var(--gold); }
+
+/* التكاتف: navy majlis, falling answer tiles */
+.d-tatakuf { --accent: #f2c15a; --accent-grad: linear-gradient(135deg, #ffe6a3, #f2c15a 50%, #d39a2e); --on-accent: #1a1405; --glow: rgba(242, 193, 90, .55); }
+.d-tatakuf h2 { font-family: var(--kufi); font-weight: 700; }
+.d-tatakuf .scene { background: radial-gradient(420px 360px at 50% 18%, #2a3a82, transparent 70%), linear-gradient(180deg, #121b45, #0a0f2a); }
+.tile { position: absolute; top: -60px; width: 54px; height: 54px; border-radius: 14px; display: grid; place-items: center;
+  font: 800 24px/1 var(--kufi); color: #101634; opacity: .9; animation: drop linear infinite; box-shadow: 0 10px 20px -8px rgba(0, 0, 0, .6); }
+.tile.a { left: 10%; background: #f2c15a; animation-duration: 9s; animation-delay: -2s; }
+.tile.b { left: 34%; background: #3dd6c6; animation-duration: 11s; animation-delay: -7s; width: 46px; height: 46px; }
+.tile.c { left: 62%; background: #b48cff; animation-duration: 10s; animation-delay: -4s; }
+.tile.d { left: 82%; background: #ff8f7a; animation-duration: 12s; animation-delay: -9s; width: 42px; height: 42px; }
+.tile.e { left: 48%; background: #f2c15a; animation-duration: 13s; animation-delay: -11s; width: 38px; height: 38px; opacity: .55; }
+
+/* الدخيل: lacquered cabin, zellige, a searchlight and one crew member who does not belong */
+.d-dakheel { --accent: #e0524f; --accent-grad: linear-gradient(135deg, #f1cf83, #d9a648 55%, #a8772a); --on-accent: #1d110a; --glow: rgba(217, 166, 72, .55); }
+.d-dakheel h2 { font-family: var(--calligraphy); font-size: clamp(48px, 5.2vw, 64px); }
+.d-dakheel .scene { background:
+    radial-gradient(360px 300px at 50% 20%, rgba(138, 35, 50, .75), transparent 70%),
+    repeating-conic-gradient(from 45deg at 50% 50%, rgba(15, 76, 79, .55) 0 25%, rgba(28, 17, 12, .2) 0 50%) 0 0 / 46px 46px,
+    linear-gradient(180deg, #2a1912, #140b08); }
+.beam { position: absolute; inset: -20% -40%; background: conic-gradient(from 200deg at 50% 0%, transparent 0 40%, rgba(255, 220, 160, .16) 46%, transparent 52%);
+  animation: sweep 7s ease-in-out infinite alternate; }
+.crew { position: absolute; inset-inline: 0; top: 196px; display: flex; justify-content: center; gap: 10px; }
+.crew i { width: 22px; height: 30px; border-radius: 11px 11px 6px 6px; background: #efe2c6; opacity: .78; position: relative; }
+.crew i::after { content: ""; position: absolute; top: 7px; inset-inline: 4px; height: 6px; border-radius: 4px; background: #0f4c4f; }
+.crew i.odd { background: #e0524f; opacity: 1; animation: blink 3.4s ease-in-out infinite; }
+.crew i.odd::after { background: #1d110a; }
+
+/* ساحة الرماد: a burning horizon with embers rising */
+.d-ashen { --accent: #f2a23a; --accent-grad: linear-gradient(135deg, #ffd27a, #f2a23a 50%, #e2632b); --on-accent: #1c0d03; --glow: rgba(242, 130, 50, .6); }
+.d-ashen h2 { font-family: var(--arena); font-weight: 400; font-size: clamp(46px, 5vw, 62px); letter-spacing: .01em; }
+.d-ashen .scene { background:
+    radial-gradient(520px 260px at 50% 100%, rgba(226, 99, 43, .6), transparent 70%),
+    radial-gradient(300px 240px at 50% 22%, rgba(242, 162, 58, .3), transparent 70%),
+    linear-gradient(180deg, #141829, #1d1016 60%, #2a0f08); }
+.ember { position: absolute; bottom: -10px; width: 5px; height: 5px; border-radius: 50%; background: #ffcf7a;
+  box-shadow: 0 0 10px 3px rgba(242, 130, 50, .8); animation: ember linear infinite; }
+.ridge { position: absolute; inset-inline: 0; bottom: 38%; height: 80px; background: #0c0a12;
+  clip-path: polygon(0 100%, 0 60%, 12% 35%, 22% 55%, 34% 20%, 46% 50%, 58% 28%, 70% 58%, 82% 30%, 92% 50%, 100% 38%, 100% 100%); opacity: .9; }
+
+.note { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 26px; padding-block: 8px 30px; margin: 0; list-style: none; color: var(--muted); font-size: 15px; }
+.note li { display: flex; align-items: center; gap: 8px; }
+.note li::before { content: ""; width: 7px; height: 7px; transform: rotate(45deg); background: var(--gold); opacity: .8; }
+footer { text-align: center; padding-block: 26px calc(30px + env(safe-area-inset-bottom, 0px)); color: var(--muted); font-size: 14px; border-top: 1px solid rgba(240, 194, 94, .12); }
+footer strong { color: var(--gold); font-weight: 800; }
+
+@keyframes rise { from { opacity: .001; transform: translateY(40px) rotateX(8deg); } }
+@keyframes float { 50% { transform: translateY(-6px); } }
+@keyframes drop { from { transform: translateY(0) rotate(-12deg); opacity: 0; } 15% { opacity: .9; } 70% { opacity: .9; } to { transform: translateY(300px) rotate(28deg); opacity: 0; } }
+@keyframes sweep { from { transform: rotate(-24deg); } to { transform: rotate(24deg); } }
+@keyframes blink { 0%, 70%, 100% { box-shadow: none; } 80% { box-shadow: 0 0 18px 4px rgba(224, 82, 79, .9); } }
+@keyframes ember { from { transform: translate(0, 0); opacity: 0; } 12% { opacity: 1; } to { transform: translate(var(--dx), -560px); opacity: 0; } }
+
+@media (max-width: 980px) {
+  .doors { grid-template-columns: minmax(0, 1fr); max-width: 560px; margin-inline: auto; }
+  .door { min-height: 470px; border-radius: 160px 160px 22px 22px; }
+  .door::after { border-radius: 154px 154px 17px 17px; }
+  .emblem { margin-top: 44px; width: 100px; height: 100px; }
+  .crew { top: 162px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .tile { top: auto; bottom: 52%; }
+}
+</style>
+
+<div class="sky" aria-hidden="true"><canvas id="stars"></canvas></div>
+<div class="wrap">
+  <header class="crest">
+    <svg class="crest-mark" viewBox="0 0 240 280" aria-hidden="true"><defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0bd"/><stop offset=".5" stop-color="#f2c15a"/><stop offset="1" stop-color="#c98a1f"/></linearGradient><linearGradient id="ci" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#25336e"/><stop offset="1" stop-color="#0d1434"/></linearGradient></defs><g transform="translate(-140 2)"><path d="M155 268V123C155 58 226.4 33 260 18c33.6 15 105 40 105 105v145Z" fill="url(#ci)" stroke="url(#cg)" stroke-width="9" stroke-linejoin="round"/><path d="M176 256V133c0-55.1 57.1-76.3 84-89 26.9 12.7 84 33.9 84 89v123Z" fill="none" stroke="#f2c15a" stroke-width="2" opacity=".55"/><g stroke="url(#cg)" stroke-width="22.5" stroke-linecap="round" fill="none"><path d="M220.94 136.5 260 207.06"/><path d="M299.06 136.5 260 207.06"/></g><circle cx="209.6" cy="108.15" r="14.25" fill="url(#cg)"/><circle cx="310.4" cy="108.15" r="14.25" fill="url(#cg)"/><path d="m260 139.65 9.75 9.75-9.75 9.75-9.75-9.75z" fill="#3dd6c6"/></g></svg>
+    <p class="eyebrow">الرافعية × <bdi>VAMOS</bdi></p>
+    <h1>مجلس الألعاب</h1>
+    <p class="lede">اختر لعبتك وادخل. كل الألعاب مجانية وتشتغل من المتصفح على طول.</p>
+    <svg class="flourish" viewBox="0 0 320 14" aria-hidden="true"><path d="M0 7h130M190 7h130" stroke="currentColor" stroke-width="1"/><path d="m160 1 6 6-6 6-6-6z" fill="currentColor"/><path d="m140 7 4-4 4 4-4 4zM172 7l4-4 4 4-4 4z" fill="currentColor" opacity=".6"/></svg>
+  </header>
+
+  <main class="doors" aria-label="الألعاب">
+    <a class="door d-tatakuf" style="--i:0" href="https://tatakuf.vamosx.workers.dev/" data-game="tatakuf">
+      <div class="scene" aria-hidden="true"><b class="tile a">أ</b><b class="tile b">ب</b><b class="tile c">ج</b><b class="tile d">د</b><b class="tile e">؟</b></div>
+      <div class="emblem" aria-hidden="true"><svg viewBox="0 0 240 280"><use href="#tatakuf-mark"/></svg></div>
+      <div class="copy">
+        <span class="kind">مسابقات جماعية</span>
+        <h2>التكاتف</h2>
+        <p>أسئلة بالدور قدام الشاشة الكبيرة، كل واحد يجاوب من جواله. وفيه وضع الخدعة تكتب فيه جوابًا يضيّع ربعك.</p>
+        <ul class="chips"><li>2 إلى 15 لاعب</li><li>شاشة المجلس</li><li>عن بُعد</li><li>ضد البوتات</li></ul>
+        <span class="go">ادخل المجلس <span aria-hidden="true">←</span></span>
+      </div>
+    </a>
+
+    <a class="door d-dakheel" style="--i:1" href="https://al-dakheel.vamosx.workers.dev/" data-game="dakheel">
+      <div class="scene" aria-hidden="true"><div class="beam"></div><div class="crew"><i></i><i></i><i class="odd"></i><i></i><i></i></div></div>
+      <div class="emblem" aria-hidden="true"><svg viewBox="0 0 128 128"><defs><radialGradient id="dbg" cx="50%" cy="40%" r="65%"><stop offset="0" stop-color="#5a2a1c"/><stop offset="1" stop-color="#1a0f0a"/></radialGradient><linearGradient id="dg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6d98f"/><stop offset="1" stop-color="#b9862f"/></linearGradient></defs><circle cx="64" cy="64" r="62" fill="url(#dbg)" stroke="url(#dg)" stroke-width="4"/><g fill="none" stroke="#d4a24c" stroke-opacity=".45" stroke-width="2"><rect x="30" y="30" width="68" height="68"/><rect x="30" y="30" width="68" height="68" transform="rotate(45 64 64)"/></g><path fill="url(#dg)" d="M64 36c5 0 8 4 8 9 0 3-1 5-3 7l15-6c6-2 13-1 18 3-8 1-15 4-21 9l-9 8 4 22-12-8-12 8 4-22-9-8c-6-5-13-8-21-9 5-4 12-5 18-3l15 6c-2-2-3-4-3-7 0-5 3-9 8-9z"/><circle cx="67" cy="44" r="2" fill="#1a0f0a"/></svg></div>
+      <div class="copy">
+        <span class="kind">خيانة وتصويت</span>
+        <h2>الدخيل</h2>
+        <p>طاقم على متن طائرة الصقر وبينهم دخيل. أنجزوا المهام واكشفوه في المجلس قبل ما يسيطر على الرحلة.</p>
+        <ul class="chips"><li>3 إلى 12 لاعب</li><li>أونلاين</li><li>جوال وكمبيوتر</li></ul>
+        <span class="go">اصعد الطائرة <span aria-hidden="true">←</span></span>
+      </div>
+    </a>
+
+    <a class="door d-ashen" style="--i:2" href="https://aa9986087-cyber.github.io/ashen-arena/" data-game="ashen">
+      <div class="scene" aria-hidden="true"><div class="ridge"></div><div class="embers"></div></div>
+      <div class="emblem" aria-hidden="true"><svg viewBox="0 0 128 128"><defs><radialGradient id="abg" cx="50%" cy="60%" r="60%"><stop offset="0" stop-color="#4a1a0c"/><stop offset="1" stop-color="#120c16"/></radialGradient><linearGradient id="af" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#e2632b"/><stop offset=".55" stop-color="#f2a23a"/><stop offset="1" stop-color="#ffe3a0"/></linearGradient><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6c45a"/><stop offset="1" stop-color="#c9781f"/></linearGradient></defs><circle cx="64" cy="64" r="62" fill="url(#abg)" stroke="url(#ag)" stroke-width="4"/><path d="M64 22c4 14 22 22 22 44 0 14-10 26-22 26S42 80 42 66c0-10 6-16 10-20 0 8 4 12 8 12-4-14 0-28 4-36z" fill="url(#af)"/><path d="M64 60c2 7 10 10 10 20 0 7-5 12-10 12s-10-5-10-12c0-6 4-9 6-11 0 4 2 6 4 6-2-6-1-11 0-15z" fill="#fff1c4" opacity=".85"/><path d="M30 100h68" stroke="url(#ag)" stroke-width="3" stroke-linecap="round"/><path d="M38 108h52" stroke="url(#ag)" stroke-width="2" stroke-linecap="round" opacity=".6"/></svg></div>
+      <div class="copy">
+        <span class="kind">بقاء ثلاثي الأبعاد</span>
+        <h2>ساحة الرماد</h2>
+        <p>اصمد قدام موجات الوحوش والزعماء، طوّر قدراتك بين المراحل، ونافس على لوحة الصدارة.</p>
+        <ul class="chips"><li>لاعب واحد</li><li>ثلاثية الأبعاد</li><li>جوال وكمبيوتر</li></ul>
+        <span class="go">ادخل الساحة <span aria-hidden="true">←</span></span>
+      </div>
+    </a>
+  </main>
+
+  <ul class="note"><li>بدون تحميل أو تسجيل</li><li>تقدّمك محفوظ في كل لعبة</li><li>عربية من أول حرف لآخر حرف</li></ul>
+  <footer>صُنعت في <strong>الرافعية</strong> بيد <strong><bdi>Vamos</bdi></strong></footer>
+</div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0bd"/><stop offset=".5" stop-color="#f2c15a"/><stop offset="1" stop-color="#c98a1f"/></linearGradient><linearGradient id="ti" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#25336e"/><stop offset="1" stop-color="#0d1434"/></linearGradient><g id="tatakuf-mark" transform="translate(-140 2)"><path d="M155 268V123C155 58 226.4 33 260 18c33.6 15 105 40 105 105v145Z" fill="url(#ti)" stroke="url(#tg)" stroke-width="9" stroke-linejoin="round"/><path d="M176 256V133c0-55.1 57.1-76.3 84-89 26.9 12.7 84 33.9 84 89v123Z" fill="none" stroke="#f2c15a" stroke-width="2" opacity=".55"/><g stroke="url(#tg)" stroke-width="22.5" stroke-linecap="round" fill="none"><path d="M220.94 136.5 260 207.06"/><path d="M299.06 136.5 260 207.06"/></g><circle cx="209.6" cy="108.15" r="14.25" fill="url(#tg)"/><circle cx="310.4" cy="108.15" r="14.25" fill="url(#tg)"/><path d="m260 139.65 9.75 9.75-9.75 9.75-9.75-9.75z" fill="#3dd6c6"/></g></defs></svg>
+
+<script>
+(() => {
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Embers for the arena door.
+  const embers = document.querySelector(".embers");
+  for (let index = 0; index < 22; index += 1) {
+    const ember = document.createElement("i");
+    ember.className = "ember";
+    ember.style.left = `${Math.random() * 100}%`;
+    ember.style.setProperty("--dx", `${(Math.random() - .5) * 120}px`);
+    ember.style.animationDuration = `${4 + Math.random() * 5}s`;
+    ember.style.animationDelay = `${-Math.random() * 8}s`;
+    const size = 2 + Math.random() * 4;
+    ember.style.width = ember.style.height = `${size}px`;
+    embers.append(ember);
+  }
+
+  // A slow starfield behind everything.
+  const canvas = document.querySelector("#stars");
+  const ctx = canvas.getContext("2d");
+  let stars = [];
+  function resize() {
+    const ratio = Math.min(devicePixelRatio || 1, 2);
+    canvas.width = innerWidth * ratio; canvas.height = innerHeight * ratio;
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    stars = Array.from({ length: Math.round(innerWidth * innerHeight / 9000) }, () => ({
+      x: Math.random() * innerWidth, y: Math.random() * innerHeight, r: Math.random() * 1.3 + .2, p: Math.random() * Math.PI * 2, s: .4 + Math.random()
+    }));
+  }
+  function draw(time) {
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    for (const star of stars) {
+      const alpha = .25 + .45 * (still ? .6 : (Math.sin(time / 1000 * star.s + star.p) + 1) / 2);
+      ctx.fillStyle = `rgba(255, 236, 190, ${alpha})`;
+      ctx.beginPath(); ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2); ctx.fill();
+    }
+    if (!still) requestAnimationFrame(draw);
+  }
+  resize(); addEventListener("resize", resize); requestAnimationFrame(draw);
+
+  // Doors lean toward the pointer on devices that hover.
+  if (!still && matchMedia("(hover: hover)").matches) {
+    for (const door of document.querySelectorAll(".door")) {
+      door.addEventListener("pointermove", (event) => {
+        const box = door.getBoundingClientRect();
+        const x = (event.clientX - box.left) / box.width - .5;
+        const y = (event.clientY - box.top) / box.height - .5;
+        door.style.setProperty("--ry", `${x * 10}deg`);
+        door.style.setProperty("--rx", `${-y * 8}deg`);
+      });
+      door.addEventListener("pointerleave", () => { door.style.setProperty("--ry", "0deg"); door.style.setProperty("--rx", "0deg"); });
+    }
+  }
+
+  // Remember the last game on this device and mark its door.
+  const key = "vamos-hub-last";
+  let last = null;
+  try { last = localStorage.getItem(key); } catch { /* No storage; no badge. */ }
+  for (const door of document.querySelectorAll(".door")) {
+    if (door.dataset.game === last) {
+      const badge = document.createElement("span");
+      badge.className = "last"; badge.textContent = "آخر لعبة لعبتها";
+      door.append(badge);
+    }
+    door.addEventListener("click", () => { try { localStorage.setItem(key, door.dataset.game); } catch { /* Fine without it. */ } });
+  }
+})();
+</script>
