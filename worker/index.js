@@ -336,7 +336,7 @@ function viewRoom(room, player, revision, now = Date.now()) {
       voters: room.question.options.map((_, index) =>
         room.players.filter((entry) => room.answers[entry.id] === index).map((entry) => entry.name))
     } : {}),
-    ...(bluff && showAnswer ? { authors: room.question.authors.map((authors) => authors.map(nameOf)) } : {})
+    ...(bluff && showAnswer ? { authors: room.question.authors.map((authors) => authors.map(nameOf).filter(Boolean)) } : {})
   } : null;
 
   return {
@@ -476,6 +476,28 @@ function applyAction(room, player, action, input, now) {
     if (room.chat.length > 75) room.chat.shift();
     return true;
   }
+  if (action === "kick") {
+    requireHost(room, player);
+    const target = room.players.find((entry) => entry.id === input.playerId);
+    if (!target) return false;
+    if (target.id === hostOf(room).id) throw new GameError(400, "ما تقدر تطرد نفسك.");
+    if (room.phase !== "lobby" && room.players.length <= 1) throw new GameError(409, "لازم يبقى لاعب واحد على الأقل.");
+    const chooser = room.phase === "select" ? chooserFor(room) : null;
+    room.players = room.players.filter((entry) => entry !== target);
+    room.kicked = [...(room.kicked ?? []), target.token].slice(-50);
+    delete room.answers[target.id];
+    if (room.fakes) delete room.fakes[target.id];
+    room.botAnswers = (room.botAnswers ?? []).filter((entry) => entry.id !== target.id);
+    // Whoever was holding the round up is gone, so carry on if everyone left has already answered.
+    if (room.phase === "select" && chooserFor(room) !== chooser) {
+      room.deadline = now + (chooserFor(room).bot ? botTurnTime : categoryTime);
+    } else if ((room.phase === "question" || room.phase === "vote") && Object.keys(room.answers).length === room.players.length) {
+      reveal(room, now);
+    } else if (room.phase === "write" && Object.keys(room.fakes).length === room.players.length) {
+      startVote(room, now);
+    }
+    return true;
+  }
   if (action === "rematch") {
     requireHost(room, player);
     if (room.phase !== "finished") throw new GameError(409, "المباراة الحالية ما انتهت.");
@@ -497,6 +519,7 @@ async function roomRequest(db, code, action, input, token) {
       ? (room.screenHost?.token === token ? room.screenHost : room.players.find((entry) => entry.token === token))
       : null;
     let changed = false;
+    if (!player && token && room.kicked?.includes(token)) throw new GameError(410, "المضيف أخرجك من الغرفة.");
 
     if (action === "join" && !player) {
       if (room.mode === "bots") throw new GameError(404, "ما لقينا الغرفة.");
@@ -577,7 +600,7 @@ async function handleApi(request, pathname, db) {
     return json(await createRoom(db, await readInput(request)), 201);
   }
 
-  const match = pathname.match(/^\/api\/rooms\/([23456789A-HJ-NP-Z]{6})(?:\/(invite|join|start|category|fake|answer|chat|rematch))?$/);
+  const match = pathname.match(/^\/api\/rooms\/([23456789A-HJ-NP-Z]{6})(?:\/(invite|join|start|category|fake|answer|chat|rematch|kick))?$/);
   if (!match) throw new GameError(404, "الطلب غير موجود.");
   const [, code, action] = match;
   const token = request.headers.get("Authorization")?.match(/^Bearer ([0-9a-f-]{36})$/i)?.[1];

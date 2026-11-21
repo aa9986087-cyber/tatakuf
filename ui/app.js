@@ -617,7 +617,8 @@ function createRoomShell() {
   const online = room.mode === "online";
   app.innerHTML = `<section class="game mode-${room.mode}" ${room.display ? "data-display" : ""}>
     <div class="game-head"><div><p class="mode-chip">${modes[room.mode].title}</p><h1 tabindex="-1" id="game-title"></h1><p id="round-label" class="muted"></p></div>
-      ${room.mode === "bots" ? "" : roomBadge(room.code)}</div>
+      <div class="head-side">${room.mode === "bots" ? "" : roomBadge(room.code)}
+        ${room.playerId === room.hostId && room.mode !== "bots" ? `<button type="button" class="btn outline players-button" data-action="players">اللاعبين</button>` : ""}</div></div>
     <p id="room-message" class="error" role="alert"></p>
     <div class="game-layout">
       <div class="game-main"></div>
@@ -1075,7 +1076,12 @@ async function sync() {
     const error = app.querySelector("#room-message");
     if (error?.dataset.source === "network") error.textContent = "";
   } catch (error) {
-    if (error.status === 401) {
+    if (error.status === 410) {
+      token = room = null;
+      sessionStorage.removeItem(storageKey);
+      if (dialog.open) dialog.close();
+      showStatus(error.message, false, false);
+    } else if (error.status === 401) {
       token = room = null;
       sessionStorage.removeItem(storageKey);
       showJoinPage(error.message);
@@ -1126,6 +1132,34 @@ async function gameAction(action, button) {
       message.textContent = error.status ? error.message : "تعذّر الاتصال. جرّب مرة ثانية.";
     }
     if (error.status === 409) void sync();
+  }
+}
+
+// The host can remove a player who left or went quiet, so the round stops waiting for them.
+let kickArmed = null;
+function openPlayers() {
+  const others = room.players.filter((player) => player.id !== room.hostId);
+  openDialog("اللاعبين", "اطرد اللاعب اللي طلع أو ما يرد، وتكمل الجولة بدونه.", others.length
+    ? `<ul class="kick-list">${others.map((player) => `<li><span class="player-name"><span class="avatar" aria-hidden="true">${e(player.bot ? "✦" : [...player.name][0])}</span><bdi>${e(player.name)}</bdi></span>
+      <button type="button" class="btn ${kickArmed === player.id ? "danger" : "outline"}" data-action="kick" data-player="${e(player.id)}">${kickArmed === player.id ? "متأكد؟ اطرد" : "اطرد"}</button></li>`).join("")}</ul>
+      <p class="error" data-kick-error role="alert"></p>`
+    : `<p class="muted">ما فيه لاعبين غيرك.</p>`);
+}
+
+async function kickPlayer(button) {
+  const id = button.dataset.player;
+  if (kickArmed !== id) { kickArmed = id; openPlayers(); return; }
+  button.disabled = true;
+  try {
+    const data = await api(`/api/rooms/${roomCode}/kick`, { playerId: id });
+    kickArmed = null;
+    renderRoom(data.room, true);
+    playSound("tap");
+    openPlayers();
+  } catch (error) {
+    button.disabled = false;
+    const line = dialog.querySelector("[data-kick-error]");
+    if (line) line.textContent = error.status ? error.message : "تعذّر الاتصال. جرّب مرة ثانية.";
   }
 }
 
@@ -1185,6 +1219,8 @@ document.addEventListener("click", (event) => {
   else if (action === "rounds-step") setRounds(button.form, Number(button.form.elements.rounds.value) + Number(button.dataset.step));
   else if (action === "rounds-set") setRounds(button.form, Number(button.dataset.rounds));
   else if (action === "chat-toggle") toggleChat();
+  else if (action === "players") { playSound("tap"); kickArmed = null; openPlayers(); }
+  else if (action === "kick") void kickPlayer(button);
   else if (action === "toggle-categories") {
     const form = button.closest("form");
     const boxes = [...form.querySelectorAll('input[name="category"]')];

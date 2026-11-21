@@ -481,3 +481,30 @@ test("letters questions are answered by typing, forgiving «ال», hamza and ta
   assert.deepEqual(revealed.question.typedAnswers.map(({ name, correct: ok }) => [name, ok]), [["ناصر", true], ["محمد", false]]);
   assert.deepEqual(revealed.players.map(({ gained }) => gained), [1, 0]);
 });
+
+test("the host can kick a silent player so the round carries on without them", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 100_000 });
+  const { request, path, host, guest } = await setup(t, 30);
+  const third = await request(path + "/join", { name: "غايب" });
+  const gone = (action = "", body) => request(path + action, body, third.data.token);
+  const thirdId = (await gone()).data.room.playerId;
+  const guestId = (await guest()).data.room.playerId;
+  const hostId = (await host()).data.room.playerId;
+  assert.equal((await guest("/kick", { playerId: thirdId })).status, 403);
+  assert.equal((await host("/kick", { playerId: hostId })).status, 400);
+  await host("/start", {});
+  const question = (await host("/category", { round: 1, category: "science" })).data.room.question;
+  await host("/answer", { questionId: question.id, option: 0 });
+  await guest("/answer", { questionId: question.id, option: 1 });
+  assert.equal((await host()).data.room.phase, "question");
+  const kicked = await host("/kick", { playerId: thirdId });
+  assert.equal(kicked.status, 200);
+  assert.equal(kicked.data.room.phase, "reveal");
+  assert.deepEqual(kicked.data.room.players.map(({ name }) => name), ["ناصر", "محمد"]);
+  const after = await gone();
+  assert.equal(after.status, 410);
+  assert.equal((await gone("/answer", { questionId: question.id, option: 0 })).status, 410);
+  // The last player besides the host can go too, but somebody always stays.
+  assert.equal((await host("/kick", { playerId: guestId })).status, 200);
+  assert.equal((await host()).data.room.players.length, 1);
+});
