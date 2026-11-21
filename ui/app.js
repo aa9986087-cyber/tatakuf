@@ -1135,8 +1135,13 @@ async function gameAction(action, button) {
   }
 }
 
+// Set once the page is on its way to a new room, so a second tap cannot create another one.
+let leaving = false;
+
 // The host can remove a player who left or went quiet, so the round stops waiting for them.
+// The confirm step only takes a tap after a short pause, so a double tap never kicks by itself.
 let kickArmed = null;
+let kickArmedAt = 0;
 function openPlayers() {
   const others = room.players.filter((player) => player.id !== room.hostId);
   openDialog("اللاعبين", "اطرد اللاعب اللي طلع أو ما يرد، وتكمل الجولة بدونه.", others.length
@@ -1148,7 +1153,8 @@ function openPlayers() {
 
 async function kickPlayer(button) {
   const id = button.dataset.player;
-  if (kickArmed !== id) { kickArmed = id; openPlayers(); return; }
+  if (kickArmed !== id) { kickArmed = id; kickArmedAt = Date.now(); openPlayers(); return; }
+  if (Date.now() - kickArmedAt < 600) return;
   button.disabled = true;
   try {
     const data = await api(`/api/rooms/${roomCode}/kick`, { playerId: id });
@@ -1345,6 +1351,7 @@ document.addEventListener("submit", async (event) => {
         ...(mode === "bots" ? { bots: Number(data.get("bots")), difficulty: data.get("difficulty") } : {})
       });
       sessionStorage.setItem(`tahaddi-alrabaa:${created.room.code}`, created.token);
+      leaving = true;
       window.location.assign(`/room/${created.room.code}`);
     } else {
       const joined = await api(`/api/rooms/${roomCode}/join`, { name: data.get("name"), history: questionHistory() });
@@ -1356,7 +1363,7 @@ document.addEventListener("submit", async (event) => {
     }
   } catch (error) {
     errorElement.textContent = error.status ? error.message : "تعذّر الاتصال. جرّب مرة ثانية.";
-  } finally { button.disabled = false; }
+  } finally { if (!leaving) button.disabled = false; }
 });
 
 updateSoundButton();
