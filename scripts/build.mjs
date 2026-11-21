@@ -1,4 +1,5 @@
 import { readFile, writeFile, mkdir, copyFile, rm } from "node:fs/promises";
+import { buildHub } from "../hub/build.mjs";
 
 // Checks a question bank: at least 10 per category, four distinct options, unique prompts
 // (a shared prompt is fine when the picture differs, e.g. flags) and valid picture references.
@@ -65,6 +66,9 @@ h1{color:#e7c56f}li{margin-bottom:8px}a{color:#e7c56f}small{color:#a9b2cf}</styl
 <main><h1>مصادر صور الأسئلة</h1><p>صور الحيوانات والشخصيات من ويكيميديا كومنز، وكل صورة بترخيصها واسم صاحبها.</p>
 <ol>${credits.map((entry) => `<li><a href="${escape(entry.source)}">${escape(entry.source.split("File:")[1].replace(/_/g, " "))}</a><br><small dir="auto">${escape(entry.artist)} · ${escape(entry.license)}</small></li>`).join("")}</ol>
 <p><a href="/">العودة للعبة</a></p></main></html>`);
+  // The games hub lives at /games/ as a static page, so it ships with this worker's deploys.
+  await mkdir("dist/public/games", { recursive: true });
+  await writeFile("dist/public/games/index.html", await buildHub());
   await writeFile("dist/public/_headers", "/questions/*\n  Cache-Control: public, max-age=86400\n");
   const counts = Object.fromEntries([
     ...Object.entries(questions).map(([id, items]) => [id, items.length]),

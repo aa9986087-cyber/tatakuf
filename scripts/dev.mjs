@@ -44,6 +44,11 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
         ...(method === "GET" || method === "HEAD" ? {} : { body: incoming, duplex: "half" })
       });
       // Static assets (question photos) are served first, like Cloudflare does in production.
+      if (["/games", "/games/"].includes(new URL(request.url).pathname) && method === "GET") {
+        outgoing.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        outgoing.end(await readFile("dist/public/games/index.html"));
+        return;
+      }
       const photo = new URL(request.url).pathname.match(/^\/questions\/([a-z0-9-]+\.webp)$/);
       if (photo && method === "GET") {
         try {
