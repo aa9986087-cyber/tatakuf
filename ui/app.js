@@ -10,8 +10,12 @@ const categories = {
   culture: { title: "ثقافة وفنون", icon: "♫" },
   movies: { title: "أفلام ومسلسلات", icon: "▶" },
   babalhara: { title: "باب الحارة", icon: "⌂" },
-  flags: { title: "أعلام الدول", icon: "⚑" }
+  flags: { title: "أعلام الدول", icon: "⚑" },
+  animals: { title: "حيوانات", icon: "🐾" },
+  people: { title: "شخصيات مشهورة", icon: "♛" },
+  letters: { title: "الحروف", icon: "أ" }
 };
+let typedError = "";
 const bankKey = (format, category) => (format === "bluff" ? "bluff." : "") + category;
 const formats = {
   classic: { title: "كلاسيكي", description: "سؤال وأربعة خيارات، والإجابة الصحيحة بنقطة." },
@@ -401,12 +405,16 @@ function scores() {
 }
 
 function questionCard(item, hint = "شوف السؤال على الشاشة") {
-  const words = item.prompt ? item.prompt.split(/\s+/u).map((word, index) =>
+  // Letters questions read «حرف «ز»: clue»; show the letter as a big tile and the clue as the question.
+  const letter = item.prompt?.match(/^حرف «(.+?)»: (.*)$/u);
+  const text = letter ? letter[2] : item.prompt;
+  const words = text ? text.split(/\s+/u).map((word, index) =>
     `<span class="word" style="--i:${index}">${e(word)}</span>`).join(" ") : e(hint);
   return `<section class="panel question-card cat-${item.category}">
     ${timer()}
     <p class="eyebrow cat-${item.category}"><span class="pick-dot" aria-hidden="true"></span>${categories[item.category].title}
       <span class="picked-by">· ${pickedLabel(item)}</span></p>
+    ${letter ? `<div class="letter-tile" aria-label="الحرف ${e(letter[1])}">${e(letter[1])}</div>` : ""}
     <h2 dir="auto">${words}</h2>
     ${item.image ? `<button type="button" class="image-zoom" data-action="zoom" aria-label="كبّر الصورة: ${e(item.image.alt)}">
       <img class="question-image" src="/questions/${e(item.image.file)}" alt="${e(item.image.alt)}" width="750" height="500">
@@ -453,9 +461,30 @@ function writeView() {
   </section>`;
 }
 
+function typedView() {
+  const item = room.question;
+  const answered = room.yourAnswer !== null;
+  const progress = `${format(room.answeredCount)} من ${format(room.players.length)} جاوبوا`;
+  return `${questionCard(item)}
+  <section class="panel bluff-write typed-answer">
+    ${room.spectator ? "<h2>الإجابات من الجوالات</h2>"
+      : answered ? `<h2>سجّلنا إجابتك</h2><p class="muted">${room.display ? "مخفية عن الحاضرين" : `<bdi>${e(room.yourAnswer)}</bdi>`}. انتظر الباقين.</p>`
+      : `<h2>اكتب الجواب</h2>
+        <form class="fake-form" data-form="typed">
+          <input name="typed" maxlength="40" required autocomplete="off" dir="auto" aria-label="إجابتك" placeholder="اكتب الكلمة…" ${room.display ? 'class="masked"' : ""}>
+          <button class="btn primary" type="submit">أرسل</button>
+        </form>
+        <p class="fake-error" data-typed-error role="alert" ${typedError ? "" : "hidden"}>${e(typedError)}</p>
+        <p class="muted">ما يهم «ال» ولا الهمزات ولا التاء المربوطة.</p>`}
+    ${presence()}
+    <p class="muted progress">${progress}</p>
+  </section>`;
+}
+
 function questionView() {
   const item = room.question;
   if (room.phase === "write") return writeView();
+  if (item.typed) return typedView();
   const answered = room.yourAnswer !== null;
   const progress = `${format(room.answeredCount)} من ${format(room.players.length)} جاوبوا`;
   const own = new Set(room.display ? [] : item.ownOptions ?? []);
@@ -491,8 +520,26 @@ function leaderboard(order, title) {
 }
 
 // Stage one of the reveal: the answers stay on screen, coloured, with who picked each (and who wrote each fake).
+function typedResults() {
+  const item = room.question;
+  const me = room.players.find((player) => player.id === room.playerId);
+  const mine = item.typedAnswers.find((entry) => entry.name === me?.name);
+  const headline = room.display ? `الجواب: <bdi>${e(item.correctAnswer)}</bdi>`
+    : room.yourAnswer === null ? "انتهى وقت الإجابة" : mine?.correct ? "إجابتك صحيحة ✓" : "إجابتك غلط";
+  return `${questionCard(item)}
+  <section class="panel typed-truth"><p class="eyebrow">الجواب الصحيح</p><h2><bdi>${e(item.correctAnswer)}</bdi></h2></section>
+  <ul class="typed-results" aria-label="إجابات اللاعبين">${item.typedAnswers.map((entry, index) => `
+    <li class="${entry.text === null ? "none" : entry.correct ? "right" : "wrong"}" style="--step:${index}">
+      <span class="typed-name"><bdi>${e(entry.name)}</bdi></span>
+      <strong>${entry.text === null ? "ما جاوب" : `<bdi>${e(entry.text)}</bdi>`}</strong>
+      <span class="typed-mark" aria-hidden="true">${entry.text === null ? "–" : entry.correct ? "✓" : "✗"}</span>
+    </li>`).join("")}</ul>
+  <p class="answer-status reveal-status"><span>${headline}</span><span class="muted">${isFinalRound() ? "النتيجة النهائية بعد لحظات" : "الترتيب بعد لحظات"}</span></p>`;
+}
+
 function answersView() {
   const item = room.question;
+  if (item.typed) return typedResults();
   const bluff = Boolean(item.authors);
   const me = room.players.find((player) => player.id === room.playerId);
   const names = (list) => list.map((name) => `<bdi>${e(name)}</bdi>`).join("، ");
@@ -729,7 +776,9 @@ function updateChat() {
 function playPhaseSound(previous) {
   if (!previous) return;
   if (room.phase === "reveal") {
-    const key = room.display || room.yourAnswer === room.question.correctIndex ? "correct" : "incorrect";
+    const me = room.question.typedAnswers?.find((entry) => entry.name === room.players.find((player) => player.id === room.playerId)?.name);
+    const right = room.question.typed ? me?.correct : room.yourAnswer === room.question.correctIndex;
+    const key = room.display || right ? "correct" : "incorrect";
     playSound(key);
   } else playSound({ lobby:"join", select:"select", question:"question", write:"question", vote:"select",
     finale:"finale", finished:"finished" }[room.phase]);
@@ -739,7 +788,7 @@ function renderRoom(next, force = false) {
   if (room && next.revision < room.revision) return;
   const previous = room;
   const phaseChanged = !previous || previous.phase !== next.phase || previous.round !== next.round;
-  if (phaseChanged) fakeError = "";
+  if (phaseChanged) fakeError = typedError = "";
   room = next;
   rememberQuestions(next.seenQuestions);
   syncClock(next);
@@ -1173,6 +1222,26 @@ document.addEventListener("submit", async (event) => {
   if (!kind) return;
   event.preventDefault();
   if (kind === "chat") { await sendChat(form); return; }
+  if (kind === "typed") {
+    const button = form.querySelector("button");
+    const input = form.elements.typed;
+    if (button.disabled || pending || !room?.question) return;
+    pending = button.disabled = true;
+    try {
+      const data = await api(`/api/rooms/${roomCode}/answer`, { questionId: room.question.id, text: input.value });
+      pending = false;
+      typedError = "";
+      renderRoom(data.room, true);
+      playSound("locked");
+    } catch (error) {
+      pending = button.disabled = false;
+      typedError = error.status ? error.message : "تعذّر الإرسال. جرّب مرة ثانية.";
+      const inline = app.querySelector("[data-typed-error]");
+      if (inline) { inline.textContent = typedError; inline.hidden = false; }
+      if (error.status === 409) void sync();
+    }
+    return;
+  }
   if (kind === "fake") {
     const button = form.querySelector("button");
     const input = form.elements.fake;

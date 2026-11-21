@@ -458,3 +458,26 @@ test("any number of rounds from 1 to 30, and a one-round match goes straight to 
   t.mock.timers.tick(5500);
   assert.equal((await host()).data.room.phase, "finished");
 });
+
+test("letters questions are answered by typing, forgiving «ال», hamza and taa marbuta", async (t) => {
+  const { request } = await setup(t);
+  const created = await request("", { name: "ناصر", rounds: 5, seconds: 20, categories: ["letters"] });
+  const path = `/${created.data.room.code}`;
+  const host = (action = "", body) => request(path + action, body, created.data.token);
+  const guest = await request(path + "/join", { name: "محمد" });
+  const asGuest = (action = "", body) => request(path + action, body, guest.data.token);
+  await host("/start", {});
+  const question = (await host("/category", { round: 1, category: "letters" })).data.room.question;
+  assert.equal(question.typed, true);
+  assert.deepEqual(question.options, []);
+  const correct = bank.letters.find((entry) => entry[0] === question.prompt)[1];
+  const variant = ("ال" + correct.replace(/^ال/u, "")).replace(/ة$/u, "ه").replace(/^ا?ل?أ/u, (m) => m.replace("أ", "ا"));
+  assert.equal((await host("/answer", { questionId: question.id, text: "" })).status, 400);
+  assert.equal((await host("/answer", { questionId: question.id, option: 0 })).status, 400);
+  assert.equal((await host("/answer", { questionId: question.id, text: ` ${variant} ` })).status, 200);
+  const revealed = (await asGuest("/answer", { questionId: question.id, text: "كلمة غلط" })).data.room;
+  assert.equal(revealed.phase, "reveal");
+  assert.equal(revealed.question.correctAnswer, correct);
+  assert.deepEqual(revealed.question.typedAnswers.map(({ name, correct: ok }) => [name, ok]), [["ناصر", true], ["محمد", false]]);
+  assert.deepEqual(revealed.players.map(({ gained }) => gained), [1, 0]);
+});

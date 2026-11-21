@@ -920,3 +920,35 @@ input[type="range"][name="rounds"]::-moz-range-thumb {
 [data-display] .lobby-crest img { height: clamp(140px, 18vw, 200px); }
 .game-main.settled .lobby-crest img { animation: none; }
 @keyframes crest-in { from { opacity: 0; transform: translateY(-10px) scale(.92); } }
+
+/* New categories */
+.cat-animals { --category: #a6e36f; }
+.cat-people { --category: #e6a8ff; }
+.cat-letters { --category: #ff9f6b; }
+
+/* Letters: a big letter tile and a typed answer */
+.letter-tile {
+  display: grid; place-items: center; width: clamp(76px, 14vw, 120px); aspect-ratio: 1; margin: 2px 0 14px; border-radius: 24px;
+  background: linear-gradient(150deg, #ffb48a, #ff7f50); color: #2a1206; -webkit-text-fill-color: #2a1206;
+  font-size: clamp(44px, 8vw, 72px); font-weight: 900; line-height: 1; box-shadow: 0 14px 36px -10px #ff8f6bb0;
+  animation: crest-in .6s cubic-bezier(.3,1.5,.5,1) both;
+}
+.game-main.settled .letter-tile { animation: none; }
+[data-display] .letter-tile { width: clamp(110px, 12vw, 160px); font-size: clamp(64px, 7vw, 100px); }
+.typed-truth { text-align: center; border-color: #6fd8c9; background: linear-gradient(150deg, #173f45, #12243a); }
+.typed-truth .eyebrow { color: var(--jade); margin: 0; }
+.typed-truth h2 { margin: 4px 0 0; font-size: clamp(26px, 4vw, 40px); }
+.typed-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(160px, 44%), 1fr)); gap: 10px; list-style: none; margin: 0; padding: 0; }
+.typed-results li {
+  position: relative; display: grid; gap: 4px; padding: 12px 14px; border-radius: 14px; border: 1px solid #2c3656; background: #121931;
+  animation: result-in .5s cubic-bezier(.2,.8,.25,1.15) calc(var(--step) * 160ms + 200ms) both;
+}
+.typed-results li.right { border-color: #6fd8c9; background: linear-gradient(150deg, #173f45, #12243a); }
+.typed-results li.wrong { border-color: #a96d64; background: linear-gradient(150deg, #2c2026, #171c2e); }
+.typed-results li.none { opacity: .6; }
+.typed-name { color: var(--muted); font-size: 13px; font-weight: 800; }
+.typed-results strong { font-size: 18px; overflow-wrap: anywhere; }
+.typed-mark { position: absolute; top: 10px; inset-inline-end: 12px; font-size: 18px; font-weight: 900; }
+.typed-results li.right .typed-mark { color: var(--jade); }
+.typed-results li.wrong .typed-mark { color: #ff8f8f; }
+.game-main.settled .typed-results li { animation: none; }

@@ -173,6 +173,8 @@ setInterval(async () => {
     } else if (room.phase === "write" && room.yourFake === null && Math.random() < 0.2) {
       const fakes = ["قطعة بسكويت", "عام 1777", "البطريق", "سبعة", "جزر القمر", "الرصاص", "الحمام الزاجل"];
       await asPlayer(token, "/fake", { questionId: room.question.id, text: fakes[Math.floor(Math.random() * fakes.length)] });
+    } else if (room.phase === "question" && room.question.typed && room.yourAnswer === null && Math.random() < 0.25) {
+      await asPlayer(token, "/answer", { questionId: room.question.id, text: ["زرافة", "تمر", "الرياض", "قطة"][Math.floor(Math.random() * 4)] });
     } else if ((room.phase === "question" || room.phase === "vote") && room.yourAnswer === null && Math.random() < 0.25) {
       const own = room.question.ownOptions ?? [];
       const allowed = room.question.options.map((_, index) => index).filter((index) => !own.includes(index));

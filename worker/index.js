@@ -102,7 +102,14 @@ function answerKey(value) {
     .replace(/[\u064B-\u065F\u0670\u0640]/gu, "")
     .replace(/[أإآٱ]/gu, "ا").replace(/ى/gu, "ي").replace(/ة/gu, "ه").replace(/ؤ/gu, "و").replace(/ئ/gu, "ي")
     .replace(/[٠-٩]/gu, (digit) => String(digit.charCodeAt(0) - 0x0660))
-    .replace(/[\p{P}\p{S}\s]+/gu, "");
+    // "الزرافة" and "زرافة" count as the same answer.
+    .split(/[\p{P}\p{S}\s]+/u).map((word) => word.length > 3 ? word.replace(/^ال/u, "") : word).join("");
+}
+
+// Letters questions in classic games are answered by typing the word.
+const isTypedCategory = (room, category) => !isBluff(room) && category === "letters";
+function typedCorrect(room, text) {
+  return typeof text === "string" && answerKey(text) === answerKey(room.question.correct);
 }
 
 function startSelection(room, now) {
@@ -182,6 +189,17 @@ function startQuestion(room, category, now, pickedBy = null) {
     })).sort((first, other) => first.at - other.at);
     return;
   }
+  if (isTypedCategory(room, category)) {
+    room.question = { id, category, pickedBy, prompt, image, typed: true, correct, decoys: [second, third, fourth], options: [] };
+    room.phase = "question";
+    room.deadline = now + room.settings.seconds * 1000;
+    room.botAnswers = room.players.filter((player) => player.bot).map((player) => ({
+      id: player.id,
+      option: Math.random() < botAccuracy[room.settings.difficulty] ? correct : randomItem([second, third, fourth]),
+      at: now + 2500 + Math.floor(Math.random() * 8000)
+    })).sort((first, other) => first.at - other.at);
+    return;
+  }
   const options = shuffled([correct, second, third, fourth]);
   room.question = {
     id, category, pickedBy, prompt, options, correctIndex: options.indexOf(correct), image
@@ -232,7 +250,7 @@ function reveal(room, now) {
   room.gained = {};
   for (const player of room.players) {
     const option = room.answers[player.id];
-    if (option === room.question.correctIndex) room.gained[player.id] = (room.gained[player.id] ?? 0) + 1;
+    if (room.question.typed ? typedCorrect(room, option) : option === room.question.correctIndex) room.gained[player.id] = (room.gained[player.id] ?? 0) + 1;
     else if (option !== undefined && isBluff(room)) {
       for (const author of room.question.authors[option]) room.gained[author] = (room.gained[author] ?? 0) + 1;
     }
@@ -309,6 +327,13 @@ function viewRoom(room, player, revision, now = Date.now()) {
     ...(bluff && room.phase === "vote" ? {
       ownOptions: room.question.authors.flatMap((authors, index) => authors.includes(player.id) ? [index] : [])
     } : {}),
+    ...(room.question?.typed ? { typed: true } : {}),
+    ...(showAnswer && room.question.typed ? {
+      correctAnswer: room.question.correct,
+      typedAnswers: room.players.map((entry) => ({
+        name: entry.name, text: room.answers[entry.id] ?? null, correct: typedCorrect(room, room.answers[entry.id])
+      }))
+    } : {}),
     ...(showAnswer ? {
       voters: room.question.options.map((_, index) =>
         room.players.filter((entry) => room.answers[entry.id] === index).map((entry) => entry.name))
@@ -334,7 +359,7 @@ function viewRoom(room, player, revision, now = Date.now()) {
     // Who has already answered (never what), so the stage can show who is still thinking.
     ...(["question", "write", "vote"].includes(room.phase) ? { answeredIds: Object.keys(room.phase === "write" ? room.fakes : room.answers) } : {}),
     question, seenQuestions: room.used,
-    ...(room.phase === "finished" && room.question ? { lastAnswer: room.question.options[room.question.correctIndex] } : {}),
+    ...(room.phase === "finished" && room.question ? { lastAnswer: room.question.typed ? room.question.correct : room.question.options[room.question.correctIndex] } : {}),
     ...(mode === "online" ? { chat: room.chat ?? [] } : {})
   };
 }
@@ -415,6 +440,16 @@ function applyAction(room, player, action, input, now) {
     if (room.screenHost?.id === player.id) throw new GameError(403, "سجّل اسمك في الغرفة أولًا عشان تجاوب.");
     const answerPhase = isBluff(room) ? "vote" : "question";
     if (room.phase !== answerPhase || room.question.id !== input.questionId) throw new GameError(409, "انتهى وقت الإجابة.");
+    if (room.question.typed) {
+      const text = typeof input.text === "string" ? input.text.trim().replace(/\s+/gu, " ") : "";
+      if (!text || [...text].length > 40 || /[\p{Cc}\u202a-\u202e\u2066-\u2069]/u.test(text) || !answerKey(text)) {
+        throw new GameError(400, "اكتب إجابة من 1 إلى 40 حرفًا.");
+      }
+      if (Object.hasOwn(room.answers, player.id)) return false;
+      room.answers[player.id] = text;
+      if (Object.keys(room.answers).length === room.players.length) reveal(room, now);
+      return true;
+    }
     if (!Number.isInteger(input.option) || input.option < 0 || input.option >= room.question.options.length) {
       throw new GameError(400, "اختر إجابة من الخيارات.");
     }
