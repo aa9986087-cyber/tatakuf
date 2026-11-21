@@ -1019,6 +1019,11 @@ async function gameAction(action, button) {
   };
   pending = true;
   button.disabled = true;
+  // Lock every option together, so nobody can tell which one was tapped (it matters on the shared screen).
+  if (action === "answer") {
+    for (const option of app.querySelectorAll('button.option')) option.disabled = true;
+    button.blur();
+  }
   const errorLine = app.querySelector("#room-message");
   errorLine.textContent = "";
   try {

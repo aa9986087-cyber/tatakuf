@@ -227,7 +227,7 @@ legend { font-weight: 800; margin-bottom: 9px; }
   overflow-wrap: anywhere; transition: transform .18s,border .18s,background .18s;
 }
 [data-display] .option { font-size: clamp(20px,3vw,36px); min-height: 80px; }
-.option:enabled:hover { transform: translateY(-2px); border-color: var(--gold); }
+@media (hover: hover) { .option:enabled:hover { transform: translateY(-2px); border-color: var(--gold); } }
 .option.selected { border-color: var(--gold); background: #393421; }
 .option.correct { border-color: #80d5cd; background: #1e294d; animation: answer-in .45s ease-out; }
 .option.incorrect { border-color: #a96d64; background: #392a25; }
@@ -735,7 +735,7 @@ body::before {
   background: linear-gradient(150deg, color-mix(in srgb, var(--opt, #10172d) 16%, #10172d), #10172d 72%);
 }
 .option .option-mark { background: var(--opt, #2a4031); color: #10162a; -webkit-text-fill-color: #10162a; font-weight: 900; }
-.option:enabled:hover { border-color: var(--opt); box-shadow: 0 12px 30px -8px color-mix(in srgb, var(--opt) 55%, transparent); }
+@media (hover: hover) { .option:enabled:hover { border-color: var(--opt); box-shadow: 0 12px 30px -8px color-mix(in srgb, var(--opt) 55%, transparent); } }
 .option:enabled:active { transform: scale(.97); }
 .option.selected { border-color: var(--gold); background: linear-gradient(150deg, #4a3d1c, #1d1a22); animation: pick-pop .4s cubic-bezier(.3,1.6,.5,1); }
 @keyframes pick-pop { 40% { transform: scale(1.04); } }
@@ -872,3 +872,11 @@ body::after {
   .hero-copy { padding: 4px 8px 0; }
   .hero h1 { margin-top: 2px; }
 }
+
+/* The shared screen never reacts to the host's tap: no hover glow, press shrink, focus ring or highlight */
+[data-display] .option, [data-display] .option:enabled:hover, [data-display] .option:enabled:active,
+[data-display] .option:focus, [data-display] .option:focus-visible {
+  transform: none; box-shadow: none; outline: none; transition: none;
+  border-color: color-mix(in srgb, var(--opt, #29324e) 40%, #29324e);
+}
+[data-display] .option { -webkit-tap-highlight-color: transparent; }
