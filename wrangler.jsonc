@@ -3,6 +3,9 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "tatakuf",
   "main": "dist/server/index.js",
+  // The build already makes one self-contained file. Uploading it as it is keeps the Arabic text as
+  // UTF-8; re-bundling would write every Arabic letter as \uXXXX and more than double its size.
+  "no_bundle": true,
   "compatibility_date": "2026-11-01",
   "workers_dev": true,
   "preview_urls": false,
