@@ -129,7 +129,7 @@ test("the bank contains thousands of unique questions and displays illustrated q
   assert.ok(asset.byteLength > 1000);
 });
 
-test("a 20-round match samples only unseen questions and refuses a repeat after exhaustion", async (t) => {
+test("a 20-round match samples only unseen questions, and a rematch brings seen ones back instead of hiding the category", async (t) => {
   t.mock.timers.enable({ apis: ["Date"], now: 600_000 });
   const { request } = await setup(t);
   const pack = (indices) => {
@@ -159,7 +159,37 @@ test("a 20-round match samples only unseen questions and refuses a repeat after 
   }
   assert.equal(observed.size, 20);
   assert.equal((await host()).data.room.phase, "finished");
-  assert.equal((await host("/rematch", {})).status, 409);
+  // everything in the category has been seen now: the category stays, and the old questions come back
+  const again = await host("/rematch", {});
+  assert.equal(again.status, 200);
+  assert.equal((await host("/start", {})).data.room.phase, "select");
+  t.mock.timers.tick(60_000);
+  const next = (await host()).data.room;
+  assert.equal(next.phase, "question");
+  assert.equal(next.question.category, "general");
+});
+
+test("a category everyone has seen to the end is still offered, and one match never repeats a question", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 600_000 });
+  const { request } = await setup(t);
+  const all = (n) => { const bytes = Buffer.alloc(Math.ceil(n / 8)); for (let i = 0; i < n; i += 1) bytes[i >> 3] |= 1 << (i % 8); return bytes.toString("base64"); };
+  const history = { general: all(bank.general.length), science: all(bank.science.length) };
+  const created = await request("", { mode: "online", name: "بدر", rounds: 5, seconds: 15, categories: ["general", "science"], history });
+  assert.equal(created.status, 201);
+  const path = `/${created.data.room.code}`;
+  const host = (action = "", body) => request(path + action, body, created.data.token);
+  assert.equal((await request(path + "/join", { name: "فيصل", history })).status, 200);
+  const start = (await host("/start", {})).data.room;
+  assert.deepEqual([...start.available].sort(), ["general", "science"]);
+  const asked = new Set();
+  for (let round = 1; round <= 5; round += 1) {
+    t.mock.timers.tick(60_000);
+    const state = (await host()).data.room;
+    assert.equal(state.phase, "question");
+    assert.equal(asked.has(state.question.id), false);
+    asked.add(state.question.id);
+    t.mock.timers.tick(15_000 + (round === 5 ? 12_000 + 5500 : 12_000));
+  }
 });
 
 test("online chat is scoped to room members, accepts simultaneous senders, and deduplicates retries", async (t) => {

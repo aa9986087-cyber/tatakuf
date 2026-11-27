@@ -18,7 +18,7 @@
 ["كم ضلعًا في المربع؟", "4", "3", "5", "6"]
 ```
 
-لإضافة صورة، ضع ملف WebP أو SVG في `ui/questions/` وأضف قيمة سادسة للسؤال بالشكل `{"file":"example.webp","alt":"وصف يوضح ما في الصورة"}`. استخدم `npm test` للتحقق من الأسئلة. إضافة الأسئلة في نهاية القائمة تحفظ معرّفات الأسئلة التي ظهرت في الغرف القائمة. يحتفظ المتصفح بسجل الأسئلة التي ظهرت، وتستبعد الغرفة سجل المشاركين عند إنشاء المباراة أو الانضمام.
+لإضافة صورة، ضع ملف WebP أو SVG في `ui/questions/` وأضف قيمة سادسة للسؤال بالشكل `{"file":"example.webp","alt":"وصف يوضح ما في الصورة"}`. استخدم `npm test` للتحقق من الأسئلة. إضافة الأسئلة في نهاية القائمة تحفظ معرّفات الأسئلة التي ظهرت في الغرف القائمة. يحتفظ المتصفح بسجل الأسئلة التي ظهرت، وتستبعد الغرفة سجل المشاركين عند إنشاء المباراة أو الانضمام. إذا شاف اللاعبون كل أسئلة فئة، ما تختفي الفئة: ترجع أسئلتها القديمة (بدون تكرار داخل المباراة نفسها)، وسجل المتصفح لهذي الفئة يبدأ من جديد.
 
 تتضمن الأسئلة صياغات أصلية وتمارين حساب ومنطق، بالإضافة إلى حقائق عن الدول والعناصر والرياضة والأدب والتاريخ. [Country Codes](https://github.com/datasets/country-codes) · [PubChem](https://pubchem.ncbi.nlm.nih.gov/periodic-table/) · [OpenFootball](https://github.com/openfootball/football.json) · [Open Library](https://openlibrary.org/developers/licensing) · [Nobel Prize](https://nobelprize.readme.io/reference/getting-started) · [World Factbook](https://github.com/factbook/factbook.json) · [world-countries](https://github.com/mledoze/countries) · [Unicode CLDR](https://cldr.unicode.org/) (أسماء الدول والعملات واللغات بالعربية)
 

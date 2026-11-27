@@ -124,11 +124,20 @@ function chooserFor(room) {
   return room.players[(room.round - 1) % room.players.length];
 }
 
+/**
+ * The questions of a category this match can still ask: the ones nobody in the room has seen yet,
+ * and once everyone has seen them all, any question not asked in this match. A category never
+ * disappears from the picker just because the players have played it a lot.
+ */
+function playable(room, category) {
+  const seen = new Set(room.seen), used = new Set(room.used), key = keyOf(room, category);
+  const bank = bankOf(room)[category];
+  const fresh = bank.flatMap((_, index) => seen.has(key + "-" + index) ? [] : [index]);
+  return fresh.length ? fresh : bank.flatMap((_, index) => used.has(key + "-" + index) ? [] : [index]);
+}
+
 function availableCategories(room) {
-  const seen = new Set(room.seen);
-  return room.settings.categories.filter((category) =>
-    bankOf(room)[category].some((_, index) => !seen.has(keyOf(room, category) + "-" + index))
-  );
+  return room.settings.categories.filter((category) => playable(room, category).length);
 }
 
 function addHistory(room, packedHistory) {
@@ -154,10 +163,11 @@ function addHistory(room, packedHistory) {
 }
 
 function requireEnoughQuestions(room) {
-  const seen = new Set(room.seen);
+  // seen questions come back once a category runs out, so only this match's own questions are spent
+  const used = new Set(room.used);
   let remaining = 0;
   for (const category of room.settings.categories) {
-    remaining += bankOf(room)[category].filter((_, index) => !seen.has(keyOf(room, category) + "-" + index)).length;
+    remaining += bankOf(room)[category].filter((_, index) => !used.has(keyOf(room, category) + "-" + index)).length;
   }
   if (remaining < room.settings.rounds) {
     throw new GameError(409, "الأسئلة الجديدة ما تكفي للجولات المختارة. جرّب فئات أكثر أو جولات أقل.");
@@ -166,9 +176,8 @@ function requireEnoughQuestions(room) {
 
 // pickedBy is the player who chose the category, or null when the clock picked one at random.
 function startQuestion(room, category, now, pickedBy = null) {
-  const seen = new Set(room.seen);
   const bank = bankOf(room)[category];
-  const eligible = bank.flatMap((_, index) => seen.has(keyOf(room, category) + "-" + index) ? [] : [index]);
+  const eligible = playable(room, category);
   const visual = room.round === 1 || room.round % 5 === 0
     ? eligible.filter((index) => bank[index][5])
     : [];

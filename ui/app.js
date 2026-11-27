@@ -98,6 +98,12 @@ function readHistory() {
 function rememberQuestions(ids = []) {
   if (!ids.some((id) => !seenQuestions.has(id))) return;
   seenQuestions = new Set([...readHistory(), ...seenQuestions, ...ids]);
+  // a category seen to the end starts over, so the history never shuts a category away
+  for (const [key, count] of Object.entries(bankCounts)) {
+    let all = count > 0;
+    for (let index = 0; all && index < count; index += 1) all = seenQuestions.has(key + "-" + index);
+    if (all) for (let index = 0; index < count; index += 1) seenQuestions.delete(key + "-" + index);
+  }
   try { localStorage.setItem(historyKey, JSON.stringify([...seenQuestions])); } catch { /* Session history remains available. */ }
 }
 
