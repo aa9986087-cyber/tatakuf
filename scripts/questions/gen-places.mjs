@@ -64,7 +64,8 @@ export function places(seed = 31) {
       const c = one(x.f.cL); if (!c || !x.label || x.label.length > 40 || x.sl < minSl) continue;
       const k = byLabel.get(c); if (!k) continue;
       const near = cs.filter((o) => o.continent === k.continent && o.name !== k.name).map((o) => o.name);
-      out.push(q(`في أي دولة ${word} ${x.label}؟`, k.name, wrongFrom(r, near, k.name) || wrongFrom(r, names, k.name)));
+      const lead = word.split(" ").pop(); // «يقع جبل» + «جبل الزيتون» is said once
+      out.push(q(`في أي دولة ${x.label.startsWith(lead + " ") ? word.split(" ")[0] : word} ${x.label}؟`, k.name, wrongFrom(r, near, k.name) || wrongFrom(r, names, k.name)));
     }
   };
   inCountry("cities", "x", "تقع مدينة", 50);

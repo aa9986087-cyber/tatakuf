@@ -39,7 +39,7 @@ export function general(seed = 7) {
     () => { const s = int(r, 2, 30); return q(`مربع طول ضلعه ${s} سم. كم محيطه؟`, 4 * s, nearNumbers(r, 4 * s, 8, { step: 2 })); },
     () => { const k = P([[1, 2], [1, 3], [2, 3], [1, 4], [3, 5], [2, 5]]), unit = int(r, 2, 40) * 10, total = (k[0] + k[1]) * unit; return q(`قُسّم مبلغ ${total} ريال بين أخوين بنسبة ${k[0]} إلى ${k[1]}. كم نصيب صاحب النصيب الأكبر؟`, k[1] * unit, nearNumbers(r, k[1] * unit, unit, { step: 10 })); },
     () => { const a = int(r, 5, 60); return q(`مجموع ثلاثة أعداد متتالية ${3 * a + 3}. ما أصغرها؟`, a, nearNumbers(r, a, 3)); },
-    () => { const per = int(r, 12, 60), m = int(r, 3, 20); return q(`تطبع آلة ${per} صفحة في الدقيقة. كم صفحة تطبع في ${m} دقيقة؟`, per * m, nearNumbers(r, per * m, per)); },
+    () => { const per = int(r, 12, 60), m = int(r, 3, 20); return q(`تطبع آلة ${per} صفحة في الدقيقة. كم صفحة تطبع في ${count(m, "دقائق", "دقيقة")}؟`, per * m, nearNumbers(r, per * m, per)); },
     () => { const age = int(r, 6, 15), k = P([2, 3, 4]), y = int(r, 3, 12); const nm = P(NAMES); return q(`عمر ${nm} ${count(age, "سنوات", "سنة")}، وعمر أبيه ${k} أضعاف عمره. كم سيكون عمر الأب بعد ${count(y, "سنوات", "سنة")}؟`, age * k + y, nearNumbers(r, age * k + y, 6)); },
     () => { const a = int(r, 100, 999), b = int(r, 100, 999); return q(`كم ناتج ${a} + ${b}؟`, a + b, nearNumbers(r, a + b, 20, { step: 10 })); },
     () => { const a = int(r, 500, 1999), b = int(r, 100, 499); return q(`كم ناتج ${a} − ${b}؟`, a - b, nearNumbers(r, a - b, 20, { step: 10 })); },
