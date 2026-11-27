@@ -124,20 +124,66 @@ function chooserFor(room) {
   return room.players[(room.round - 1) % room.players.length];
 }
 
+// ---------- which questions the room has seen ----------
+// Banks run to thousands of questions, so what the players have seen is kept as one bitmap per bank
+// key (bit i = question i), not as a list of ids: small to store and quick to read on every request.
+const bitsFor = (room, key) => {
+  room.seenBits ||= {};
+  const limit = keyLimit(key), size = Math.ceil(limit / 8);
+  let bytes = room._bits?.[key];
+  if (!bytes) {
+    bytes = new Uint8Array(size);
+    const raw = room.seenBits[key] ? atob(room.seenBits[key]) : "";
+    for (let i = 0; i < Math.min(size, raw.length); i += 1) bytes[i] = raw.charCodeAt(i);
+    Object.defineProperty(room, "_bits", { value: room._bits || {}, enumerable: false, configurable: true });
+    room._bits[key] = bytes;
+  }
+  return bytes;
+};
+const keyLimit = (key) => (key.startsWith("bluff.") ? bluffQuestions[key.slice(6)] : questions[key])?.length ?? 0;
+const hasBit = (bytes, i) => (bytes[i >> 3] & (1 << (i % 8))) !== 0;
+function setSeen(room, key, index) {
+  const bytes = bitsFor(room, key);
+  bytes[index >> 3] |= 1 << (index % 8);
+  let text = ""; for (const b of bytes) text += String.fromCharCode(b);
+  room.seenBits[key] = btoa(text);
+}
+const countBits = (bytes, limit) => { let n = 0; for (let i = 0; i < limit; i += 1) if (hasBit(bytes, i)) n += 1; return n; };
+/** Rooms saved before the bitmaps kept a list of ids: turn it into bitmaps once. */
+function upgradeSeen(room) {
+  if (!Array.isArray(room.seen)) return;
+  for (const id of room.seen) {
+    const at = id.lastIndexOf("-"), key = id.slice(0, at), index = Number(id.slice(at + 1));
+    if (keyLimit(key) > index) setSeen(room, key, index);
+  }
+  delete room.seen;
+}
+
 /**
- * The questions of a category this match can still ask: the ones nobody in the room has seen yet,
- * and once everyone has seen them all, any question not asked in this match. A category never
- * disappears from the picker just because the players have played it a lot.
+ * Can this match still ask something from the category? Yes while some question is new to every
+ * player in the room, and once all have been seen, while some question was not asked in this match.
+ * A category never disappears from the picker just because the players have played it a lot.
  */
-function playable(room, category) {
-  const seen = new Set(room.seen), used = new Set(room.used), key = keyOf(room, category);
-  const bank = bankOf(room)[category];
-  const fresh = bank.flatMap((_, index) => seen.has(key + "-" + index) ? [] : [index]);
-  return fresh.length ? fresh : bank.flatMap((_, index) => used.has(key + "-" + index) ? [] : [index]);
+function canAsk(room, category) {
+  const key = keyOf(room, category), limit = bankOf(room)[category].length;
+  if (countBits(bitsFor(room, key), limit) < limit) return true;
+  return room.used.filter((id) => id.startsWith(key + "-")).length < limit;
+}
+/** A question to ask: a new one if there is any, else one not asked in this match (a picture one when wanted). */
+function pickIndex(room, category, wantPicture) {
+  const key = keyOf(room, category), bank = bankOf(room)[category], bytes = bitsFor(room, key);
+  const used = new Set(room.used.filter((id) => id.startsWith(key + "-")).map((id) => Number(id.slice(key.length + 1))));
+  const fresh = countBits(bytes, bank.length) < bank.length;
+  const ok = (i) => (fresh ? !hasBit(bytes, i) : !used.has(i)) && (!wantPicture || bank[i][5]);
+  // a few random tries find one at once in a big bank; the walk from a random start finds the last ones
+  for (let t = 0; t < 40; t += 1) { const i = Math.floor(Math.random() * bank.length); if (ok(i)) return i; }
+  const start = Math.floor(Math.random() * bank.length);
+  for (let k = 0; k < bank.length; k += 1) { const i = (start + k) % bank.length; if (ok(i)) return i; }
+  return wantPicture ? pickIndex(room, category, false) : -1;
 }
 
 function availableCategories(room) {
-  return room.settings.categories.filter((category) => playable(room, category).length);
+  return room.settings.categories.filter((category) => canAsk(room, category));
 }
 
 function addHistory(room, packedHistory) {
@@ -145,29 +191,28 @@ function addHistory(room, packedHistory) {
   if (!packedHistory || typeof packedHistory !== "object" || Array.isArray(packedHistory)) {
     throw new GameError(400, "تعذّر قراءة سجل الأسئلة.");
   }
-  const seen = new Set(room.seen);
   for (const category of room.settings.categories) {
-    const encoded = packedHistory[keyOf(room, category)];
+    const key = keyOf(room, category), encoded = packedHistory[key];
     if (encoded === undefined) continue;
     const limit = bankOf(room)[category].length;
     if (typeof encoded !== "string" || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded) ||
         encoded.length % 4 !== 0 || encoded.length > Math.ceil(limit / 24) * 4) {
       throw new GameError(400, "تعذّر قراءة سجل الأسئلة.");
     }
-    const bytes = atob(encoded);
-    for (let index = 0; index < Math.min(limit, bytes.length * 8); index += 1) {
-      if (bytes.charCodeAt(index >> 3) & (1 << (index % 8))) seen.add(keyOf(room, category) + "-" + index);
-    }
+    const raw = atob(encoded), bytes = bitsFor(room, key);
+    for (let i = 0; i < Math.min(bytes.length, raw.length); i += 1) bytes[i] |= raw.charCodeAt(i);
+    if (limit % 8) bytes[bytes.length - 1] &= (1 << (limit % 8)) - 1; // no bits past the end of the bank
+    let text = ""; for (const b of bytes) text += String.fromCharCode(b);
+    room.seenBits[key] = btoa(text);
   }
-  room.seen = [...seen];
 }
 
 function requireEnoughQuestions(room) {
   // seen questions come back once a category runs out, so only this match's own questions are spent
-  const used = new Set(room.used);
   let remaining = 0;
   for (const category of room.settings.categories) {
-    remaining += bankOf(room)[category].filter((_, index) => !used.has(keyOf(room, category) + "-" + index)).length;
+    const key = keyOf(room, category);
+    remaining += bankOf(room)[category].length - room.used.filter((id) => id.startsWith(key + "-")).length;
   }
   if (remaining < room.settings.rounds) {
     throw new GameError(409, "الأسئلة الجديدة ما تكفي للجولات المختارة. جرّب فئات أكثر أو جولات أقل.");
@@ -177,15 +222,11 @@ function requireEnoughQuestions(room) {
 // pickedBy is the player who chose the category, or null when the clock picked one at random.
 function startQuestion(room, category, now, pickedBy = null) {
   const bank = bankOf(room)[category];
-  const eligible = playable(room, category);
-  const visual = room.round === 1 || room.round % 5 === 0
-    ? eligible.filter((index) => bank[index][5])
-    : [];
-  const index = randomItem(visual.length ? visual : eligible);
+  const index = pickIndex(room, category, room.round === 1 || room.round % 5 === 0);
   const [prompt, correct, second, third, fourth, image] = bank[index];
   const id = keyOf(room, category) + "-" + index;
   room.used.push(id);
-  room.seen.push(id);
+  setSeen(room, keyOf(room, category), index);
   if (isBluff(room)) {
     room.question = { id, category, pickedBy, prompt, image, correct, decoys: shuffled([second, third, fourth]) };
     room.phase = "write";
@@ -395,7 +436,7 @@ async function createRoom(db, input) {
     const room = {
       code, mode, settings, players, phase: "lobby", round: 0,
       ...(mode === "screen" ? { displayId: owner.id } : {}),
-      deadline: null, used: [], seen: [], answers: {}, question: null
+      deadline: null, used: [], seenBits: {}, answers: {}, question: null
     };
     addHistory(room, input.history);
     requireEnoughQuestions(room);
@@ -524,6 +565,7 @@ async function roomRequest(db, code, action, input, token) {
     const now = Date.now();
     if (!row || row.expires_at <= now) throw new GameError(404, "الغرفة غير موجودة أو انتهت صلاحيتها.");
     const room = JSON.parse(row.state);
+    upgradeSeen(room);
     let player = token
       ? (room.screenHost?.token === token ? room.screenHost : room.players.find((entry) => entry.token === token))
       : null;
